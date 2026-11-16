@@ -1943,7 +1943,7 @@ Ready to commit: `crates/core/src/lib.rs crates/core/src/format.rs crates/core/t
 ## Task 7: Verification & Docs
 
 **Files:**
-- Create: `README.md`
+- Modify: `README.md` (replace the whole file with the content in Step 2)
 
 - [ ] **Step 1: Check the module list**
 
