@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["crates/core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# The oldest toolchain that knows edition 2024. Development uses 1.99; this only states the floor.
+rust-version = "1.85"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+# The daemon runs for the whole session, so the release build is tuned for a small resident
+# set first and speed second: one codegen unit and fat LTO let dead code be dropped across
+# crates, and aborting on panic removes the unwinding tables.
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
