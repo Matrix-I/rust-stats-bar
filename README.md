@@ -3,20 +3,18 @@
 A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardware figures in the
 panel, details one click away, built to cost as little CPU and memory as possible.
 
-**Status:** planning only. No code exists yet; nothing builds or runs.
+Status: the pure core only. Nothing runs yet. See `docs/plans/` for the roadmap.
 
-## Planned design
+## Development
 
-| Process | Role |
-|---|---|
-| `statsbard` | Session daemon without a GUI toolkit: polls the machine, draws the tray items, serves snapshots. |
-| `statsbar-panel` | GTK4 + libadwaita window, spawned on demand by the daemon, exits when closed. |
-| `statsbar-fan-helper` | Small root helper, used only for fan control. |
+```bash
+./scripts/check.sh    # formatting, lints, tests and the purity gate
+```
 
-Pure arithmetic (CPU load, memory buckets, throughput, history, alerts, formatting) lives in
-`crates/core`, which does no I/O and is tested without hardware.
-
-Target: this machine only — Dell laptop, Intel UHD 620, `dell_smm` fan, Ubuntu 26.04, GNOME on Wayland.
+`crates/core` is the pure layer: no file, socket, clock, thread or `unsafe`, and no dependency other
+than `serde`. `scripts/check-core-purity.sh` fails the build on a violation. Arithmetic goes there, with
+an integration test in `crates/core/tests/` written first; anything that touches the machine goes in a
+reader, which hands plain values to the core.
 
 ## Plans
 
