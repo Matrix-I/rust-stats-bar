@@ -5,3 +5,4 @@
 //! tests pin the arithmetic on any machine, and `scripts/check-core-purity.sh` enforces it.
 
 pub mod cpu;
+pub mod memory;
