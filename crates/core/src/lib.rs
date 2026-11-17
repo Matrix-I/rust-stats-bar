@@ -6,6 +6,7 @@
 
 pub mod alert;
 pub mod cpu;
+pub mod format;
 pub mod history;
 pub mod memory;
 pub mod throughput;
