@@ -77,7 +77,7 @@ there is nothing to migrate.
 - Produces: `./scripts/check.sh` (exit 0 when formatting, lints, tests and the purity gate all pass);
   `./scripts/check-core-purity.sh` (exit 1 naming the offending lines).
 
-- [ ] **Step 1: Create the branch**
+- [x] **Step 1: Create the branch**
 
 The repository already exists (`~/Desktop/rust-statsbar`, remote `origin` =
 `github.com/Matrix-I/rust-stats-bar`) and holds these plans. Branch from the latest `main`:
@@ -90,12 +90,12 @@ git switch -c feature/core-pure-layer origin/main
 If the plans' branch `chore/add-plans` is not merged into `main` yet, branch from it instead, so the
 plans stay in the tree: `git switch -c feature/core-pure-layer chore/add-plans`.
 
-- [ ] **Step 2: Run the check that does not exist yet**
+- [x] **Step 2: Run the check that does not exist yet**
 
 Run: `./scripts/check.sh`
 Expected: FAIL — the shell reports that `./scripts/check.sh` does not exist.
 
-- [ ] **Step 3: Write the workspace and the scripts**
+- [x] **Step 3: Write the workspace and the scripts**
 
 `.gitignore`:
 
@@ -229,12 +229,12 @@ cargo test --workspace
 chmod +x scripts/check.sh scripts/check-core-purity.sh
 ```
 
-- [ ] **Step 4: Run the check**
+- [x] **Step 4: Run the check**
 
 Run: `./scripts/check.sh`
 Expected: PASS — ends with `core purity: ok`.
 
-- [ ] **Step 5: Prove both halves of the gate can fail**
+- [x] **Step 5: Prove both halves of the gate can fail**
 
 ```bash
 echo 'use std::fs;' >> crates/core/src/lib.rs
@@ -261,7 +261,7 @@ committed yet, so the first restore falls through to `sed`. Confirm no mutant is
 `tail -1 crates/core/src/lib.rs` must print the doc comment's last line, and
 `diff crates/core/Cargo.toml target/core-manifest.toml` must print nothing.
 
-- [ ] **Step 6: Commit checkpoint**
+- [x] **Step 6: Commit checkpoint**
 
 Ready to commit: `.gitignore Cargo.toml Cargo.lock crates/core/Cargo.toml crates/core/src/lib.rs scripts/check.sh scripts/check-core-purity.sh`
 — `chore: scaffold workspace with verification script and core purity gate`
@@ -281,7 +281,7 @@ Ready to commit: `.gitignore Cargo.toml Cargo.lock crates/core/Cargo.toml crates
   - `pub struct CpuLoad { pub system_percent: f64, pub user_percent: f64, pub idle_percent: f64, pub per_core_busy: Vec<f64> }`
   - `impl CpuLoad { pub fn between(previous: &[CoreTicks], current: &[CoreTicks]) -> Option<CpuLoad>; pub fn usage_percent(&self) -> f64 }`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/core/tests/cpu.rs`:
 
@@ -439,12 +439,12 @@ fn columns_that_would_overflow_saturate_instead_of_panicking() {
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `cargo test -p statsbar-core --test cpu`
 Expected: FAIL — `error[E0432]: unresolved import `statsbar_core::cpu``.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `crates/core/src/lib.rs`:
 
@@ -571,7 +571,7 @@ impl CpuLoad {
 }
 ```
 
-- [ ] **Step 4: Run it and watch it pass**
+- [x] **Step 4: Run it and watch it pass**
 
 Run: `cargo test -p statsbar-core --test cpu`
 Expected: PASS — `test result: ok. 10 passed`.
@@ -579,7 +579,7 @@ Expected: PASS — `test result: ok. 10 passed`.
 Run: `./scripts/check.sh`
 Expected: PASS.
 
-- [ ] **Step 5: Commit checkpoint**
+- [x] **Step 5: Commit checkpoint**
 
 Ready to commit: `crates/core/src/lib.rs crates/core/src/cpu.rs crates/core/tests/cpu.rs`
 — `feat(core): parse /proc/stat and compute CPU load between samples`
@@ -609,7 +609,7 @@ Bucket definitions, which the tests pin:
 | `free` | `MemFree`, at most `total − used` (MemFree can exceed MemAvailable) |
 | `cached` | `total − used − free`, which is `MemAvailable − MemFree` |
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/core/tests/memory.rs`:
 
@@ -787,12 +787,12 @@ fn an_unknown_total_gives_zero_fractions_instead_of_dividing_by_zero() {
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `cargo test -p statsbar-core --test memory`
 Expected: FAIL — `error[E0432]: unresolved import `statsbar_core::memory``.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `crates/core/src/lib.rs`, so the module list reads:
 
@@ -924,7 +924,7 @@ impl MemoryBuckets {
 }
 ```
 
-- [ ] **Step 4: Run it and watch it pass**
+- [x] **Step 4: Run it and watch it pass**
 
 Run: `cargo test -p statsbar-core --test memory`
 Expected: PASS — `test result: ok. 12 passed`.
@@ -932,7 +932,7 @@ Expected: PASS — `test result: ok. 12 passed`.
 Run: `./scripts/check.sh`
 Expected: PASS.
 
-- [ ] **Step 5: Commit checkpoint**
+- [x] **Step 5: Commit checkpoint**
 
 Ready to commit: `crates/core/src/lib.rs crates/core/src/memory.rs crates/core/tests/memory.rs`
 — `feat(core): parse /proc/meminfo into memory bar buckets`
@@ -956,7 +956,7 @@ Ready to commit: `crates/core/src/lib.rs crates/core/src/memory.rs crates/core/t
     `is_empty()`, `samples() -> impl Iterator<Item = f64>`, `push(&mut self, value: f64)`,
     `plot_points(&self, width: f64, height: f64, maximum: f64) -> Vec<(f64, f64)>`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/core/tests/throughput.rs`:
 
@@ -1152,12 +1152,12 @@ fn a_single_slot_window_plots_on_the_right_edge() {
 }
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `cargo test -p statsbar-core --test throughput --test history`
 Expected: FAIL — `unresolved import `statsbar_core::throughput`` and `` `statsbar_core::history` ``.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `crates/core/src/lib.rs`, so the module list reads as below. `cargo fmt` keeps module
 declarations alphabetical, so the order is not a choice:
@@ -1359,7 +1359,7 @@ impl UsageHistory {
 }
 ```
 
-- [ ] **Step 4: Run them and watch them pass**
+- [x] **Step 4: Run them and watch them pass**
 
 Run: `cargo test -p statsbar-core --test throughput --test history`
 Expected: PASS — `8 passed` twice.
@@ -1367,7 +1367,7 @@ Expected: PASS — `8 passed` twice.
 Run: `./scripts/check.sh`
 Expected: PASS.
 
-- [ ] **Step 5: Commit checkpoint**
+- [x] **Step 5: Commit checkpoint**
 
 Ready to commit: `crates/core/src/lib.rs crates/core/src/throughput.rs crates/core/src/history.rs crates/core/tests/throughput.rs crates/core/tests/history.rs`
 — `feat(core): add throughput tracker and usage history window`
@@ -1386,7 +1386,7 @@ Ready to commit: `crates/core/src/lib.rs crates/core/src/throughput.rs crates/co
   - `pub fn new(threshold_c: f64, rearm_margin_c: f64) -> HotAlertPolicy`
   - `pub fn sensors_to_alert(&mut self, readings: &[(&str, Option<f64>)], enabled: bool) -> Vec<(String, f64)>`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/core/tests/alert.rs`:
 
@@ -1514,12 +1514,12 @@ fn disabling_silences_alerts_and_rearms_everything() {
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `cargo test -p statsbar-core --test alert`
 Expected: FAIL — `error[E0432]: unresolved import `statsbar_core::alert``.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `crates/core/src/lib.rs`, so the module list reads:
 
@@ -1596,7 +1596,7 @@ impl HotAlertPolicy {
 }
 ```
 
-- [ ] **Step 4: Run it and watch it pass**
+- [x] **Step 4: Run it and watch it pass**
 
 Run: `cargo test -p statsbar-core --test alert`
 Expected: PASS — `test result: ok. 7 passed`.
@@ -1604,14 +1604,14 @@ Expected: PASS — `test result: ok. 7 passed`.
 Run: `./scripts/check.sh`
 Expected: PASS.
 
-- [ ] **Step 5: Prove the re-arm margin is tested**
+- [x] **Step 5: Prove the re-arm margin is tested**
 
 Upstream's rule for trusting a guard: break it and watch the suite go red. In `alert.rs`, change
 `self.threshold_c - self.rearm_margin_c` to `self.threshold_c`, then run
 `cargo test -p statsbar-core --test alert`.
 Expected: FAIL in `hovering_just_below_the_threshold_does_not_rearm`. Restore the line and rerun: PASS.
 
-- [ ] **Step 6: Commit checkpoint**
+- [x] **Step 6: Commit checkpoint**
 
 Ready to commit: `crates/core/src/lib.rs crates/core/src/alert.rs crates/core/tests/alert.rs`
 — `feat(core): add hot-sensor alert policy with re-arm margin`
@@ -1634,7 +1634,7 @@ Ready to commit: `crates/core/src/lib.rs crates/core/src/alert.rs crates/core/te
   - `pub fn menu_bar_rate(bytes_per_second: f64) -> String`; `pub const MENU_BAR_RATE_WIDEST: &str = "999 MB/s"`
   - `pub fn flag_emoji(country_code: &str) -> String`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/core/tests/format.rs`:
 
@@ -1765,12 +1765,12 @@ fn country_codes_become_flags_and_anything_else_is_empty() {
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `cargo test -p statsbar-core --test format`
 Expected: FAIL — `error[E0432]: unresolved import `statsbar_core::format``.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `crates/core/src/lib.rs`, so the module list reads:
 
@@ -1925,7 +1925,7 @@ pub fn flag_emoji(country_code: &str) -> String {
 }
 ```
 
-- [ ] **Step 4: Run it and watch it pass**
+- [x] **Step 4: Run it and watch it pass**
 
 Run: `cargo test -p statsbar-core --test format`
 Expected: PASS — `test result: ok. 11 passed`.
@@ -1933,7 +1933,7 @@ Expected: PASS — `test result: ok. 11 passed`.
 Run: `./scripts/check.sh`
 Expected: PASS.
 
-- [ ] **Step 5: Commit checkpoint**
+- [x] **Step 5: Commit checkpoint**
 
 Ready to commit: `crates/core/src/lib.rs crates/core/src/format.rs crates/core/tests/format.rs`
 — `feat(core): add byte, rate, duration and flag formatting`
@@ -1945,7 +1945,7 @@ Ready to commit: `crates/core/src/lib.rs crates/core/src/format.rs crates/core/t
 **Files:**
 - Modify: `README.md` (replace the whole file with the content in Step 2)
 
-- [ ] **Step 1: Check the module list**
+- [x] **Step 1: Check the module list**
 
 `crates/core/src/lib.rs` must end with exactly:
 
@@ -1958,7 +1958,7 @@ pub mod memory;
 pub mod throughput;
 ```
 
-- [ ] **Step 2: Write the README**
+- [x] **Step 2: Write the README** — deviated: kept the Plans and License sections from the earlier README (user decision)
 
 `README.md`:
 
@@ -1982,13 +1982,13 @@ an integration test in `crates/core/tests/` written first; anything that touches
 reader, which hands plain values to the core.
 ````
 
-- [ ] **Step 3: Run the full gate**
+- [x] **Step 3: Run the full gate**
 
 Run: `./scripts/check.sh`
 Expected: PASS — the test binaries for alert, cpu, format, history, memory and throughput report `7`,
 `10`, `11`, `8`, `12` and `8` passed (56 in all), then `core purity: ok`.
 
-- [ ] **Step 4: End-to-end check against this machine**
+- [x] **Step 4: End-to-end check against this machine**
 
 The crate has no binary, so the end-to-end check feeds it this machine's real files once. Create
 `crates/core/examples/live.rs`:
@@ -2049,7 +2049,7 @@ cross-check of the CPU figure against `top` is approximate at best: this code co
 while `top`'s busy share includes `wa`. Quote the output in the report. `examples/` is outside `crates/core/src`, so the purity gate does not
 apply to it; `./scripts/check.sh` still lints it.
 
-- [ ] **Step 5: Final gate**
+- [x] **Step 5: Final gate** — deviated: review added two tests (tx-only restart, meminfo kB overflow); suite is now 58 (memory 13, throughput 9)
 
 1. `git status` and `git diff` over everything, untracked files included: no debug output, no TODO, no
    commented-out code, nothing outside this plan.
@@ -2058,7 +2058,7 @@ apply to it; `./scripts/check.sh` still lints it.
    unbounded growth (`UsageHistory` is capped, `HotAlertPolicy` forgets absent sensors); naming.
 4. `code-review-strict`, then address or report its findings. If anything changed, repeat from 1.
 
-- [ ] **Step 6: Commit checkpoint**
+- [x] **Step 6: Commit checkpoint** — also ready: `crates/core/tests/memory.rs crates/core/tests/throughput.rs`
 
 Ready to commit: `README.md crates/core/examples/live.rs`
 — `docs: add README and a live example for the core crate`
