@@ -18,15 +18,18 @@ styles?
 | D — memory, 100%, black | 64×16 | Kept | No, low contrast | Kept | No, low contrast |
 | E — CPU, 100%, white | 32×16 | Kept | No | Kept | No |
 
-The user reported the labels were too small to read in Dark. At native size, the screenshots show
-wide, visibly unclipped ink in both styles. The ink occupied about 20–21 pixels in width and 4–6
-pixels in height. The white values could be distinguished in magnified crops. The black dots of D
-were barely visible next to the dark background. Matching frames showed the same tray appearance
-in both styles.
+The user reported the labels were too small to read in Dark. The Light "legible" cells are not the
+user's answer: they are inferred from Light captures that matched the Dark ones pixel for pixel. At
+native size, the screenshots show wide, visibly unclipped ink in both styles. The ink occupied about
+20–21 pixels in width and 4–6 pixels in height. The white values could be distinguished in magnified
+crops. The black dots of D were barely visible next to the dark background. Matching frames showed
+the same tray appearance in both styles.
 
 Item A's width was steady across 7%, 37%, and 100%. The glyph and the right edge of the percentage
-stayed in place. The top bar background was dark (`#131313`) in both styles. Dark was restored
-after capture, and the watcher confirmed the removal of all five S1 items.
+stayed in place. The top bar background was dark (`#131313`) in both styles. Dark was restored after
+capture (the executor, not the user, switched the GNOME style, with the user's approval; this
+departs from the plan's rule that the user switches it), and the watcher confirmed the removal of
+all five S1 items.
 
 ## Dependencies
 

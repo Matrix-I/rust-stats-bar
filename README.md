@@ -25,6 +25,10 @@ reader, which hands plain values to the core.
 - [Plan 02a — tray spikes](docs/plans/2026-11-17-rust-statsbar-02a-spikes.md): what the GNOME panel
   does with a label pixmap, and what the tray costs in threads and memory. Results in
   [docs/spikes/](docs/spikes/).
+- [Plan 02b — font probe](docs/plans/2026-11-18-rust-statsbar-02b-font-probe.md): a system font
+  against the Stats Mini layout in the panel.
+- [Plan 02b — label renderer](docs/plans/2026-11-18-rust-statsbar-02b-label-renderer.md): the pure
+  20×20 CPU and RAM label renderer in `crates/core`.
 
 ## License
 

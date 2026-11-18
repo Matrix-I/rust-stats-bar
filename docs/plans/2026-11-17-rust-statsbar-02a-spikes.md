@@ -534,7 +534,9 @@ Then quit the spike from any item's menu (or `pkill -x label`), and confirm the 
 
 Execution on 2026-11-18: the user reported that the labels were too small and requested captures.
 The executor captured both styles, restored Dark, and verified that the watcher removed all five
-items on exit. The desktop images are outside the repository.
+items on exit. The executor, not the user, switched the GNOME style, with the user's approval; this
+departs from the plan's rule that the user switches it. The desktop images are outside the
+repository.
 
 - [x] **Step 8: Record the result**
 
@@ -945,7 +947,9 @@ Global Constraints); S1 rests on the user's eyes on one display at one scale; S2
 window per item count, not an idle-hour average (Plan 11 measures the daemon properly); and the audit
 result from Task 1, Step 6, and any dependency whose newest release is older than 12 months.
 
-- [ ] **Step 7: Ready to commit**
+- [x] **Step 7: Ready to commit**
+
+*Execution note (2026-11-18):* committed with this message once the user asked for commits.
 
 `Ready to commit: docs/plans/2026-11-16-rust-statsbar-roadmap.md README.md — "docs: record tray spike
 results and split plan 02"`
