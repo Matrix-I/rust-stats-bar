@@ -143,6 +143,23 @@ fn single_digit_values_draw_the_expected_numeral() {
 }
 
 #[test]
+fn every_pixel_is_transparent_or_opaque_white() {
+    // The other tests compare alpha only for RAM and single digits; this one pins the colour of
+    // every frame, so ink of another colour cannot pass unnoticed outside the CPU 100% frame.
+    for metric in [Metric::Cpu, Metric::Ram] {
+        for percent in 0..=100 {
+            let pixmap = render(metric, percent).unwrap();
+            for (index, pixel) in pixmap.chunks_exact(4).enumerate() {
+                assert!(
+                    pixel == [0; 4] || pixel == [255; 4],
+                    "{percent}% pixel {index}: {pixel:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn out_of_range_values_are_rejected() {
     for value in 101..=u8::MAX {
         assert!(render(Metric::Cpu, value).is_none());
