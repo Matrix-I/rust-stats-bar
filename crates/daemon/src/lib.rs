@@ -2,6 +2,7 @@
 //! decisions live in `statsbar-core`; this crate holds the parts that touch the machine and the
 //! bus, split so that everything except the event loop is testable without either.
 
+pub mod app;
 pub mod autostart;
 pub mod config;
 pub mod fsutil;
