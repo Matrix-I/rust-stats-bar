@@ -82,14 +82,13 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 - **Project invariant (enforced by `scripts/check-core-purity.sh`):** `crates/core` does no I/O, reads
   no clock, spawns nothing, has no `unsafe` and no build script, and depends on nothing but `serde`.
 - **Project invariant:** `statsbard` never links GTK and never starts a tokio runtime. Its threads are
-  bounded and named: the main event loop, plus one worker that runs blocking calls (HTTP,
-  `ideviceinfo`, `adb`) one at a time, each with its own timeout, so a slow call never stalls polling
-  or the tray. Whether `zbus` can run on the main loop instead of its own executor thread is spike S2;
-  if it cannot, that thread is the third and the last.
-  *Pending revision:* [spike S2](../spikes/2026-11-17-s2-threads.md) found the main loop can drive
-  `zbus`, but `ksni` adds a shared driver thread and `async-io` a reactor thread, and a `blocking-1`
-  pool thread was still present after 30 s — four threads before the worker. The user deferred
-  rewording this invariant; until then, this bullet is not the rule to check thread counts against.
+  bounded and named in this list, measured by spike S2 (`docs/spikes/2026-11-17-s2-threads.md`): the
+  main event loop, which also ticks the daemon's own `zbus` connection; `async-io`'s reactor thread;
+  `ksni`'s single driver thread, shared by every tray item; and one worker that runs blocking calls
+  (HTTP, `ideviceinfo`, `adb`) one at a time, each with its own timeout, so a slow call never stalls
+  polling or the tray. Threads of the `blocking` pool that `zbus` uses while connecting are allowed;
+  S2 found one (`blocking-1`) still present after 30 s, and Plan 11 measures whether it retires.
+  *Reworded 2026-11-18 with the user's approval.*
 
 ## Technical Defaults
 
@@ -117,7 +116,7 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 | Risk | Mitigation | Revert |
 |---|---|---|
 | GNOME AppIndicator can render wide tray labels too small to read | [The 02b probe](../spikes/2026-11-18-02b-system-font.md) measured 5 px for the wide system-font label and 11 px for the square Stats Mini percentage | A level icon with the figure in the menu remains a fallback |
-| Tray and D-Bus threads count towards the daemon's budget | [Spike S2](../spikes/2026-11-17-s2-threads.md) measured the main loop driving `zbus`, one shared `ksni` driver, the `async-io` reactor, and one `blocking-1` thread still present after 30 s. Additional items cost about 68 kB Pss each | The invariant revision is deferred |
+| Tray and D-Bus threads count towards the daemon's budget | [Spike S2](../spikes/2026-11-17-s2-threads.md) measured the main loop driving `zbus`, one shared `ksni` driver, the `async-io` reactor, and one `blocking-1` thread still present after 30 s. Additional items cost about 68 kB Pss each | Settled by spike S2: the invariant lists the threads S2 measured. |
 | On GNOME a tray click opens a menu, never a popover, and Wayland does not let the panel place itself under the icon | Designed around: the menu carries the at-a-glance rows, "Open details…" opens the panel where the compositor puts it | — |
 | Ubuntu removes or changes the AppIndicator extension | The panel is also launchable from a `.desktop` entry, so the app degrades to a window | — |
 | GPU usage comes from `/proc/<pid>/fdinfo`, which shows only this user's GPU clients; scanning every process is expensive | Stated in the UI as "your processes"; pids with a DRM fd are cached and rescanned every 30 s; nothing is read while the item is hidden and the panel closed | — |
@@ -230,7 +229,7 @@ task. "Evidence" is what its end-to-end check must show.
 - **Evidence:** [S1 panel observations](../spikes/2026-11-17-s1-tray-label.md) and
   [S2 thread and memory measurements](../spikes/2026-11-17-s2-threads.md). The
   [02b probe](../spikes/2026-11-18-02b-system-font.md) compared a system font and the Stats Mini
-  arrangement. The daemon thread invariant revision is deferred by the user.
+  arrangement. The thread invariant was reworded from S2's measurements on 2026-11-18.
 
 ### Plan 02b — Daemon skeleton, first vertical slice
 - **Scope:** the config file, the scheduler, the worker thread, the label renderer, the hub item with
@@ -247,8 +246,8 @@ task. "Evidence" is what its end-to-end check must show.
   value 0–100 distinct, each single digit drawn, and values above 100 rejected.
 - **Evidence:** screenshot of the panel showing live CPU % and memory %; toggling a switch removes the
   item and `strace -c` shows its file is no longer read; `ps -T` shows only the threads the invariant
-  allows. This check waits on the thread-invariant decision the user deferred: S2 already measured
-  more threads than the current wording allows.
+  allows. Written: [the daemon plan](2026-11-18-rust-statsbar-02b-daemon.md). The worker thread moves
+  to Plan 05; config parsing lives in the daemon crate, since `toml` cannot enter `core`.
 
 ### Plan 03 — Battery, fans (read-only), network label
 - **Scope:** `BAT0`, `AC`, `dell_smm` readers; default-route interface and its counters; three more
@@ -273,7 +272,7 @@ task. "Evidence" is what its end-to-end check must show.
 
 ### Plan 05 — Battery and Network pages
 - **Scope:** battery detail page; NetworkManager reader; Wi-Fi details; DNS; ping; public IP on the
-  worker thread.
+  worker thread; the worker thread (moved from 02b), with the public IP lookup as its first caller.
 - **Tests:** NetworkManager property maps → `NetworkInfo` (wired, Wi-Fi, disconnected, no IPv6);
   frequency → band and channel; `ping::stats(&[f64]) -> (mean, jitter)`; public-IP replies that are
   empty, oversized or not an address.

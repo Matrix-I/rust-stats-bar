@@ -867,7 +867,9 @@ outcome: `Settled by spike S1: <one sentence from the results document>`.
 Execution on 2026-11-18: all five variants kept their proportions and were too small to read. The
 user approved a system-font trial in Plan 02b, with another Pss measurement.
 
-- [ ] **Step 3: Record S2's outcome — with the user's approval**
+- [x] **Step 3: Record S2's outcome — with the user's approval**
+
+Executed 2026-11-18: the user approved the wording; blocking-1 was recorded as present after 30 s.
 
 The project invariant is a rule the user accepted, so its new wording is shown to the user and applied
 only on their yes. If S2 found the predicted threads, propose this paragraph to replace the one that
@@ -891,7 +893,7 @@ Replace the Risks row that starts with `` `zbus` starts its own executor thread 
 spike S2: <thread list and per-item Pss from the results document>`.
 
 Execution on 2026-11-18: S2 measured four threads and about 68 kB Pss per additional item.
-The risks table records that evidence. The user deferred changing the project invariant.
+The risks table records that evidence. The user approved the reworded invariant on 2026-11-18.
 
 - [x] **Step 4: Split Plan 02 in the roadmap**
 
