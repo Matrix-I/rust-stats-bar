@@ -15,10 +15,12 @@ spawns on demand and that exits when closed. `statsbar-fan-helper` is a root hel
 control. Pure arithmetic lives in `crates/core`, which is the only crate tests can pin without hardware.
 
 **Tech stack:** Rust 1.99 (edition 2024) · `ksni` 0.3.7 (StatusNotifierItem tray, `async-io` feature) ·
-`zbus` 6.3.0 (NetworkManager, BlueZ, UPower, notifications) · `gtk4` 0.11.5 + `libadwaita` 0.9.2 (panel
-only) · `rustix` 1.1.6 · `serde` 1.0.229 + `serde_json` 1.0.154 (IPC) · `toml` 1.2.1 (config) ·
+`zbus` 5.19.0 (NetworkManager, BlueZ, UPower, notifications; the major version `ksni` 0.3.7
+uses, so only one copy is linked) · `gtk4` 0.11.5 + `libadwaita` 0.9.2 (panel only) · `rustix` 1.1.6 ·
+`serde` 1.0.229 + `serde_json` 1.0.154 (IPC) · `toml` 1.2.1 (config) ·
 `ureq` 3.5.2 (public IP). Names and versions were checked against crates.io on 2026-11-16; their APIs
-were not, except the `ksni::Tray` method list.
+were not, except the `ksni::Tray` method list. Plan 02a built and ran `ksni` and `zbus` together on
+2026-11-18.
 
 **Branch:** one `feature/<short-desc>` branch per plan in the `rust-statsbar` repository; never commit
 on `main`.
@@ -99,16 +101,17 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 - Notifications: `org.freedesktop.Notifications` through the `zbus` connection the daemon already has —
   no extra crate.
 - Release profile: `opt-level = "s"`, fat LTO, one codegen unit, `panic = "abort"`, stripped.
-- Tray label: text drawn into the item's icon pixmap with an embedded bitmap font — `ksni` has no label
-  property, and a font stack in the daemon would cost more memory than everything else in it. Subject
-  to spike S1.
+- Tray label: use the Stats Mini arrangement as the reference for Plan 02b. Put a small module label
+  above a larger, right-aligned percentage in a fixed 20×20 pixmap. The
+  [GNOME probe](../spikes/2026-11-18-02b-system-font.md) showed 11 px of visible percentage height
+  at 125% scale. Verify the full percentage range and the RAM label on the live panel.
 
 ## Risks & Rollback
 
 | Risk | Mitigation | Revert |
 |---|---|---|
-| GNOME's AppIndicator extension may scale a wide pixmap down to a square, making labels unreadable | Spike S1 is the first task of Plan 02, before anything depends on it. Fallbacks in order: a system font through a rasteriser; a level icon with the figure in the menu | Nothing shipped yet |
-| `zbus` starts its own executor thread by default, and the tray and HTTP calls must not block each other | Spike S2 in Plan 02: drive `zbus` with its internal executor off on the main loop, and confirm `ksni`'s `async-io` feature shares that loop. Blocking calls go to the single worker thread | If S2 fails, accept the `zbus` thread and record it in the invariant |
+| GNOME AppIndicator can render wide tray labels too small to read | [The 02b probe](../spikes/2026-11-18-02b-system-font.md) measured 5 px for the wide system-font label and 11 px for the square Stats Mini percentage | A level icon with the figure in the menu remains a fallback |
+| Tray and D-Bus threads count towards the daemon's budget | [Spike S2](../spikes/2026-11-17-s2-threads.md) measured the main loop driving `zbus`, one shared `ksni` driver, the `async-io` reactor, and one `blocking-1` thread still present after 30 s. Additional items cost about 68 kB Pss each | The invariant revision is deferred |
 | On GNOME a tray click opens a menu, never a popover, and Wayland does not let the panel place itself under the icon | Designed around: the menu carries the at-a-glance rows, "Open details…" opens the panel where the compositor puts it | — |
 | Ubuntu removes or changes the AppIndicator extension | The panel is also launchable from a `.desktop` entry, so the app degrades to a window | — |
 | GPU usage comes from `/proc/<pid>/fdinfo`, which shows only this user's GPU clients; scanning every process is expensive | Stated in the UI as "your processes"; pids with a DRM fd are cached and rescanned every 30 s; nothing is read while the item is hidden and the panel closed | — |
@@ -214,11 +217,19 @@ check must show.
 - **Evidence:** `./scripts/check.sh` green with 56 tests; the purity gate goes red on a planted
   `use std::fs;`, a dev-dependency and a `build.rs`; live memory "used" matches `free`.
 
-### Plan 02 — Spikes, daemon skeleton, first vertical slice
-- **Scope:** spike S1 (does a 3:1 pixmap render legibly in the GNOME panel, light and dark?) and spike
-  S2 (`zbus` without its executor thread on the same loop as `ksni`). Then the config file, the
-  scheduler, the worker thread, the label renderer, the hub item with show/hide switches, launch at
-  login, and CPU and Memory as tray items with summary menus.
+### Plan 02a — Tray spikes *(written: `docs/plans/2026-11-17-rust-statsbar-02a-spikes.md`)*
+- **Scope:** spike S1 (does a wide label pixmap render legibly in the GNOME panel, light and dark?)
+  and spike S2 (threads and memory of `ksni` items plus a main-thread `zbus` connection). Results in
+  `docs/spikes/`.
+- **Evidence:** [S1 panel observations](../spikes/2026-11-17-s1-tray-label.md) and
+  [S2 thread and memory measurements](../spikes/2026-11-17-s2-threads.md). The
+  [02b probe](../spikes/2026-11-18-02b-system-font.md) compared a system font and the Stats Mini
+  arrangement. The daemon thread invariant revision is deferred by the user.
+
+### Plan 02b — Daemon skeleton, first vertical slice
+- **Scope:** the config file, the scheduler, the worker thread, the label renderer, the hub item with
+  show/hide switches, launch at login, and CPU and Memory as tray items with summary menus. Written
+  after Plan 02a, against its results.
 - **Core additions (pure, tested):** `schedule::due(now_nanos, &[ReaderState]) -> Vec<ReaderId>`;
   `label::render(text: &str, scale: u32) -> Pixmap`; `config::parse(text: &str) -> Result<Config, ConfigError>`.
 - **Readers:** `cpu::read(root: &Path) -> io::Result<Vec<CoreTicks>>`, `memory::read(root: &Path) -> io::Result<MemInfo>`.
