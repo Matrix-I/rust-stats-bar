@@ -22,6 +22,9 @@ reader, which hands plain values to the core.
   the list of plans 01–11.
 - [Plan 01 — core](docs/plans/2026-11-16-rust-statsbar-01-core.md): the pure `crates/core` layer,
   step by step with tests.
+- [Plan 02a — tray spikes](docs/plans/2026-11-17-rust-statsbar-02a-spikes.md): what the GNOME panel
+  does with a label pixmap, and what the tray costs in threads and memory. Results in
+  [docs/spikes/](docs/spikes/).
 
 ## License
 
