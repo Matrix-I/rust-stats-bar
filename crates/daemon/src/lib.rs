@@ -8,5 +8,6 @@ pub mod config;
 pub mod fsutil;
 pub mod paths;
 pub mod power;
+pub mod run;
 pub mod summary;
 pub mod tray;
