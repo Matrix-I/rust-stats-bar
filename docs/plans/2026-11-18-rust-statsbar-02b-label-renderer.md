@@ -13,7 +13,8 @@ For live verification reuse the installed GNOME watcher, Desktop Screenshot port
 existing [02b probe runner](2026-11-18-rust-statsbar-02b-font-probe.md).
 
 **Branch:** `feature/tray-spikes`, continuing the 02b probe on the current checkout. Preserve the
-already staged 02a changes.
+already staged 02a changes. *Recorded 2026-11-18:* the user approved keeping this renderer on the
+02a branch, in one PR with the spikes it depends on, instead of the roadmap's branch per plan.
 
 ## Confirmed Requirements
 
@@ -86,6 +87,11 @@ already staged 02a changes.
   done
   ```
 
+  `font_probe` is not in the repository: it is the binary built from the font-probe plan's
+  temporary copy of `spikes/tray` (its "Temporary probe sources"), with `CARGO_TARGET_DIR` set to
+  `spikes/tray/target`; `observe.sh` and `capture.py` come from that plan too and stay outside Git.
+  A fresh checkout has to rebuild it from those sources before this step can run.
+
   Capture 7%, 37% and 100% in both styles. Verify cleanup and record the observed label,
   text height and right edge for both metrics.
 - [x] Run `./scripts/check.sh`, the workspace release build, `git diff --check`, and review
@@ -106,7 +112,8 @@ Dark/Light pairs matched pixel-for-pixel in the tray crop.
 
 The CPU and RAM probes used four threads each. Pss at tick 15 was 2004 kB for CPU and 1992 kB
 for RAM. These were separate single-item runs with prepared frames. The GNOME watcher removed
-both items, and Dark was restored. Captures are outside Git.
+both items, and the executor restored Dark; it also made the style switches, with the user's
+approval. Captures are outside Git.
 
 `./scripts/check.sh` passed formatting, Clippy, 63 workspace tests and the core purity gate.
 The locked offline workspace release build passed on Rust 1.100.0. The Git index fingerprint

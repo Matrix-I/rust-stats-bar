@@ -21,8 +21,9 @@ The Pss difference was 12 kB in one 30 s run per mode. These two samples measure
 with its prepared frames. They do not measure an in-process rasteriser or the cost of loading fonts
 in the daemon. The result applies to the tested font, pixmap geometry and GNOME setup.
 
-The watcher removed both test items after their processes exited. The original Dark appearance
-was restored. The comparison image is kept outside Git.
+The watcher removed both test items after their processes exited. The original Dark appearance was
+restored by the executor, which also made the style switches, with the user's approval. The
+comparison image is kept outside Git.
 
 ## Stats Mini layout
 
@@ -34,9 +35,9 @@ lines are right-aligned. The prototype uses compact monochrome bitmap characters
 |---|---|---|---|---|---|
 | 20×20 Mini layout | 7 px / 7 px | 11 px / 11 px | 3940 kB | 1991 kB | 4 |
 
-At native screenshot size the three percentages were easier to distinguish than the 64×16
-variants. In all six Mini captures the percentage ended at the same right edge. The foreground
-and background matched between styles. GNOME removed the item and restored Dark after the run.
+At native screenshot size the three percentages were easier to distinguish than the 64×16 variants.
+In all six Mini captures the percentage ended at the same right edge. The foreground and background
+matched between styles. GNOME removed the item, and the executor restored Dark after the run.
 
 The square layout changed the pixmap shape, typography and label placement together. The single
 30 s Pss sample is a probe reading, so it cannot isolate a saving from the geometry. This run
