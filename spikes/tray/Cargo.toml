@@ -1,0 +1,22 @@
+# Throwaway spike for Plan 02a. Its own [workspace] keeps it out of the main workspace, so
+# scripts/check.sh and CI never build it.
+[workspace]
+
+[package]
+name = "statsbar-tray-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ksni = { version = "=0.3.7", default-features = false, features = ["async-io"] }
+zbus = { version = "=5.19.0", default-features = false, features = ["async-io"] }
+async-io = "=2.6.0"
+futures-lite = "=2.6.1"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
