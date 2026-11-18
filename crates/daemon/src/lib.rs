@@ -6,3 +6,4 @@ pub mod autostart;
 pub mod config;
 pub mod fsutil;
 pub mod paths;
+pub mod summary;
