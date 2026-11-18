@@ -10,4 +10,5 @@ pub mod format;
 pub mod history;
 pub mod label;
 pub mod memory;
+pub mod schedule;
 pub mod throughput;
