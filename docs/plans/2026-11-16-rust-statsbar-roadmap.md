@@ -23,7 +23,9 @@ were not, except the `ksni::Tray` method list. Plan 02a built and ran `ksni` and
 2026-11-18.
 
 **Branch:** one `feature/<short-desc>` branch per plan in the `rust-statsbar` repository; never commit
-on `main`.
+on `main`. One exception, approved by the user: the Plan 02b label renderer shares the Plan 02a
+branch `feature/tray-spikes`, as recorded in
+[its plan](2026-11-18-rust-statsbar-02b-label-renderer.md).
 
 ---
 
@@ -212,8 +214,8 @@ Linux sources were verified to exist on this machine on 2026-11-16 unless marked
 
 ## Plans
 
-Each plan is one branch and ends with its own verification task. "Evidence" is what its end-to-end
-check must show.
+Each plan is one branch (one exception, under **Branch** above) and ends with its own verification
+task. "Evidence" is what its end-to-end check must show.
 
 ### Plan 01 — Core pure layer *(written)*
 - **Scope:** workspace, verification scripts, purity gate; CPU load, memory buckets, throughput, usage
