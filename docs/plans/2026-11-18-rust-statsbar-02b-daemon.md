@@ -1719,7 +1719,7 @@ Ready to commit: `crates/daemon/src/summary.rs crates/daemon/src/lib.rs crates/d
   `record_error(ReaderId, u64) -> bool`
 - `cpu() -> Option<&CpuLoad>` and `memory() -> Option<&MemoryBuckets>`
 
-- [ ] **Step 1: Write the failing test** `crates/daemon/tests/app.rs`:
+- [x] **Step 1: Write the failing test** `crates/daemon/tests/app.rs`:
 
 ```rust
 use statsbar_core::cpu::CoreTicks;
@@ -1830,9 +1830,9 @@ fn power_saver_moves_the_next_wake_to_five_seconds() {
 }
 ```
 
-- [ ] **Step 2: Run** `cargo test -p statsbard --test app` and expect FAIL with
+- [x] **Step 2: Run** `cargo test -p statsbard --test app` and expect FAIL with
   `unresolved import statsbard::app`.
-- [ ] **Step 3: Implement** `crates/daemon/src/app.rs`:
+- [x] **Step 3: Implement** `crates/daemon/src/app.rs`:
 
 ```rust
 //! What the daemon knows and decides, with no I/O: which items are shown, when each reader is
@@ -1994,9 +1994,9 @@ impl App {
 }
 ```
 
-- [ ] **Step 4: Run** `cargo test -p statsbard --test app` and expect 9 passed.
+- [x] **Step 4: Run** `cargo test -p statsbard --test app` and expect 9 passed.
 
-- [ ] **Format and lint.** Run `cargo fmt --all`, then
+- [x] **Format and lint.** Run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, and expect it clean. CI runs
   `cargo fmt --check`, so an unformatted commit fails there.
 
@@ -2019,13 +2019,13 @@ Ready to commit: `crates/daemon/src/app.rs crates/daemon/src/lib.rs crates/daemo
 `power::ProfileWatch::start(&zbus::Connection) -> zbus::Result<ProfileWatch>` with the field
 `changes: zbus::proxy::PropertyStream<'static, String>`.
 
-- [ ] **Step 1: Read docs.rs** for `ksni 0.3.7` (`Tray`, `menu::StandardItem`,
+- [x] **Step 1: Read docs.rs** for `ksni 0.3.7` (`Tray`, `menu::StandardItem`,
   `menu::CheckmarkItem`, `Category`) and `zbus 5.19.0` (`proxy::Builder` with `destination`,
   `path`, `interface`, `cache_properties` and `build`; `CacheProperties::Yes`;
   `Proxy::receive_property_changed`; `proxy::PropertyStream`; `proxy::PropertyChanged::get`;
   `connection::Builder::system`). The plan review on 2026-11-18 confirmed that the default
   `Lazily` caching makes no bus call in `build`. That is why `start` asks for `Yes`.
-- [ ] **Step 2: Write the failing tests.** `crates/daemon/tests/tray.rs`:
+- [x] **Step 2: Write the failing tests.** `crates/daemon/tests/tray.rs`:
 
 ```rust
 use ksni::menu::MenuItem;
@@ -2169,9 +2169,9 @@ fn only_the_power_saver_profile_counts() {
 }
 ```
 
-- [ ] **Step 3: Run** `cargo test -p statsbard --test tray --test power`. Expect FAIL with
+- [x] **Step 3: Run** `cargo test -p statsbard --test tray --test power`. Expect FAIL with
   `unresolved import statsbard::tray` and `statsbard::power`.
-- [ ] **Step 4: Implement** `crates/daemon/src/tray.rs`:
+- [x] **Step 4: Implement** `crates/daemon/src/tray.rs`:
 
 ```rust
 //! The `ksni` tray items: one per metric, plus the hub. `ksni`'s driver thread calls their `Tray`
@@ -2402,12 +2402,12 @@ impl ProfileWatch {
 }
 ```
 
-- [ ] **Step 5: Run** `cargo test -p statsbard --test tray --test power` and expect 8 passed. Run
+- [x] **Step 5: Run** `cargo test -p statsbard --test tray --test power` and expect 8 passed. Run
   `cargo clippy -p statsbard --all-targets -- -D warnings`. If clippy flags `label::SIZE as i32`
   (`cast_possible_wrap` is pedantic, not in `clippy::all`), replace it with
   `i32::try_from(label::SIZE)` and return `None` on failure. Do not add an `allow`.
 
-- [ ] **Format and lint.** Run `cargo fmt --all`, then
+- [x] **Format and lint.** Run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, and expect it clean. CI runs
   `cargo fmt --check`, so an unformatted commit fails there.
 
@@ -2427,7 +2427,7 @@ This task is glue: D-Bus, the panel and real files. It has no unit test. Each de
 made, and tested, in Tasks 1–7. The loop is proven by Task 9's end-to-end run. Report this as the
 coverage gap for `run.rs`.
 
-- [ ] **Step 1: Implement** `crates/daemon/src/run.rs`:
+- [x] **Step 1: Implement** `crates/daemon/src/run.rs`:
 
 ```rust
 //! The daemon's event loop, on the main thread. One timer serves every reader. Menu clicks
@@ -2904,15 +2904,15 @@ fn main() -> ExitCode {
 }
 ```
 
-- [ ] **Step 2: Build.** Run `cargo build -p statsbard` and `./scripts/check.sh`, and expect both
+- [x] **Step 2: Build.** Run `cargo build -p statsbard` and `./scripts/check.sh`, and expect both
   green. Compiler errors from crate API drift are fixed against docs.rs, as the risks table says.
   Record each such fix in this task as a note.
-- [ ] **Step 3: Check the dependency invariants.**
+- [x] **Step 3: Check the dependency invariants.**
   - `cargo tree -p statsbard -e normal | grep -iE 'gtk|tokio'` → expect no output. Exit code 1
     from `grep` is the pass.
   - `cargo tree -p statsbard -d -e normal | grep -E '^zbus '` → expect no output: only one `zbus`.
 
-- [ ] **Format and lint.** Run `cargo fmt --all`, then
+- [x] **Format and lint.** Run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, and expect it clean. CI runs
   `cargo fmt --check`, so an unformatted commit fails there.
 
