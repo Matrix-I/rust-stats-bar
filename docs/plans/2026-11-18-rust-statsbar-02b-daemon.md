@@ -779,14 +779,14 @@ Modify the root `Cargo.toml`, setting
   `config::PersistError::{NotWritable, Io}`,
   `config::persist(&Path, &Config, writable: bool) -> Result<(), PersistError>`
 
-- [ ] **Step 1: Check the dependencies.**
+- [x] **Step 1: Check the dependencies.**
   - Read docs.rs for `toml 1.2.1`: `from_str`, `Table`, `map::Entry::or_insert`, `to_string`,
     `de::Error` and `ser::Error`. Confirm the default features include `parse`, `display` and
     `serde`.
   - Run `cargo info toml@1.2.1` and check that the licence is MIT OR Apache-2.0 and the crate is
     not yanked.
   - If any of this differs, stop and report it.
-- [ ] **Step 2: Manifest.** Add `"crates/daemon"` to `members` in the root `Cargo.toml`. Create
+- [x] **Step 2: Manifest.** Add `"crates/daemon"` to `members` in the root `Cargo.toml`. Create
   `crates/daemon/Cargo.toml` with every dependency the crate needs.
   Later tasks use the rest, and adding them now keeps the lock file change in one commit:
 
@@ -832,7 +832,7 @@ pub mod paths;
 fn main() {}
 ```
 
-- [ ] **Step 3: Write the failing tests.** `crates/daemon/tests/paths.rs`:
+- [x] **Step 3: Write the failing tests.** `crates/daemon/tests/paths.rs`:
 
 ```rust
 use std::ffi::OsString;
@@ -1024,10 +1024,10 @@ fn persist_saves_when_the_file_was_writable_at_load() {
 The test's `toml::Table` comes from the crate's own `[dependencies]` entry, which integration
 tests can use. No dev-dependency is added.
 
-- [ ] **Step 4: Run** `cargo test -p statsbard`. Expect FAIL with E0583 (`file not found for
+- [x] **Step 4: Run** `cargo test -p statsbard`. Expect FAIL with E0583 (`file not found for
   module paths`, and likewise for `config` and `fsutil`), because `lib.rs` declares modules whose
   files do not exist yet.
-- [ ] **Step 5: Implement.** `crates/daemon/src/paths.rs`:
+- [x] **Step 5: Implement.** `crates/daemon/src/paths.rs`:
 
 ```rust
 //! Where the daemon keeps its files, after the XDG Base Directory spec.
@@ -1255,13 +1255,13 @@ pub fn persist(path: &Path, config: &Config, writable: bool) -> Result<(), Persi
 }
 ```
 
-- [ ] **Step 6: Run** `cargo test -p statsbard` and expect 17 passed. Then run `cargo audit` and
+- [x] **Step 6: Run** `cargo test -p statsbard` and expect 17 passed. Then run `cargo audit` and
   expect no vulnerabilities. Three "unmaintained" warnings are expected: RUSTSEC-2026-0370, 0371
   and 0372 for `zvariant`, `zbus_names` and `zvariant_derive`, which came in with `zbus` in 02a.
   Report any other finding with its ID. Until Task 7, Cargo prints `unused dependency` warnings
   for `ksni` and `statsbar-readers`. They do not fail clippy, and they are expected.
 
-- [ ] **Format and lint.** Run `cargo fmt --all`, then
+- [x] **Format and lint.** Run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, and expect it clean. CI runs
   `cargo fmt --check`, so an unformatted commit fails there.
 
@@ -1281,7 +1281,7 @@ Ready to commit: `Cargo.toml Cargo.lock crates/daemon` — "feat(daemon): add th
 `autostart::disable(&Path) -> io::Result<()>`, and
 `autostart::toggle(&Path, enabled: bool, exe: impl FnOnce() -> io::Result<PathBuf>) -> io::Result<bool>`.
 
-- [ ] **Step 1: Write the failing test** `crates/daemon/tests/autostart.rs`:
+- [x] **Step 1: Write the failing test** `crates/daemon/tests/autostart.rs`:
 
 ```rust
 use std::fs;
@@ -1388,9 +1388,9 @@ fn a_failed_toggle_changes_nothing() {
 }
 ```
 
-- [ ] **Step 2: Run** `cargo test -p statsbard --test autostart` and expect FAIL with
+- [x] **Step 2: Run** `cargo test -p statsbard --test autostart` and expect FAIL with
   `unresolved import statsbard::autostart`.
-- [ ] **Step 3: Implement** `crates/daemon/src/autostart.rs`:
+- [x] **Step 3: Implement** `crates/daemon/src/autostart.rs`:
 
 ```rust
 //! Launch at login: the XDG autostart entry. Its presence *is* the setting. The config file does
@@ -1494,10 +1494,10 @@ pub fn toggle(
 }
 ```
 
-- [ ] **Step 4: Run** `cargo test -p statsbard --test autostart` and expect 8 passed. The entry is
+- [x] **Step 4: Run** `cargo test -p statsbard --test autostart` and expect 8 passed. The entry is
   validated with `desktop-file-validate` on the real file in Task 9, Step 2.7.
 
-- [ ] **Format and lint.** Run `cargo fmt --all`, then
+- [x] **Format and lint.** Run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, and expect it clean. CI runs
   `cargo fmt --check`, so an unformatted commit fails there.
 
@@ -1516,7 +1516,7 @@ Ready to commit: `crates/daemon/src/autostart.rs crates/daemon/src/lib.rs crates
 `summary::hub_rows(Option<&CpuLoad>, Option<&MemoryBuckets>, show_cpu: bool, show_memory: bool) -> Vec<String>`,
 and `summary::title(name: &str, percent: Option<u8>) -> String`.
 
-- [ ] **Step 1: Write the failing test** `crates/daemon/tests/summary.rs`:
+- [x] **Step 1: Write the failing test** `crates/daemon/tests/summary.rs`:
 
 ```rust
 use statsbar_core::cpu::CpuLoad;
@@ -1608,9 +1608,9 @@ fn titles_carry_the_value_when_there_is_one() {
 }
 ```
 
-- [ ] **Step 2: Run** `cargo test -p statsbard --test summary` and expect FAIL with
+- [x] **Step 2: Run** `cargo test -p statsbard --test summary` and expect FAIL with
   `unresolved import statsbard::summary`.
-- [ ] **Step 3: Implement** `crates/daemon/src/summary.rs`:
+- [x] **Step 3: Implement** `crates/daemon/src/summary.rs`:
 
 ```rust
 //! The text of the tray menus and titles.
@@ -1693,9 +1693,9 @@ pub fn title(name: &str, percent: Option<u8>) -> String {
 }
 ```
 
-- [ ] **Step 4: Run** `cargo test -p statsbard --test summary` and expect 7 passed.
+- [x] **Step 4: Run** `cargo test -p statsbard --test summary` and expect 7 passed.
 
-- [ ] **Format and lint.** Run `cargo fmt --all`, then
+- [x] **Format and lint.** Run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, and expect it clean. CI runs
   `cargo fmt --check`, so an unformatted commit fails there.
 
