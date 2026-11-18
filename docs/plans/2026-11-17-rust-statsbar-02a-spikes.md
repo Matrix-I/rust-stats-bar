@@ -923,6 +923,11 @@ In `README.md`, under "## Plans", after the Plan 01 bullet, add:
 
 - [x] **Step 6: Final gate**
 
+*Execution note (2026-11-18):* items 1–3 were run before the commits; `code-review-strict` (item 4)
+first ran after them. Round 1: code approved, docs had three Important findings, fixed in
+`docs: align roadmap with the label renderer and the S2 thread finding`. Round 2 approved the docs.
+Minor findings were handed to the user as follow-ups.
+
 1. Read the full diff, untracked files included: `git status --short` and `git diff origin/main`.
    Only the files named in Tasks 1–3 may appear; no debug output, TODOs or commented-out code; no
    screenshots; nothing under `spikes/tray/target/`.

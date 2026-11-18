@@ -84,6 +84,10 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
   `ideviceinfo`, `adb`) one at a time, each with its own timeout, so a slow call never stalls polling
   or the tray. Whether `zbus` can run on the main loop instead of its own executor thread is spike S2;
   if it cannot, that thread is the third and the last.
+  *Pending revision:* [spike S2](../spikes/2026-11-17-s2-threads.md) found the main loop can drive
+  `zbus`, but `ksni` adds a shared driver thread and `async-io` a reactor thread, and a `blocking-1`
+  pool thread was still present after 30 s — four threads before the worker. The user deferred
+  rewording this invariant; until then, this bullet is not the rule to check thread counts against.
 
 ## Technical Defaults
 
@@ -231,13 +235,18 @@ check must show.
   show/hide switches, launch at login, and CPU and Memory as tray items with summary menus. Written
   after Plan 02a, against its results.
 - **Core additions (pure, tested):** `schedule::due(now_nanos, &[ReaderState]) -> Vec<ReaderId>`;
-  `label::render(text: &str, scale: u32) -> Pixmap`; `config::parse(text: &str) -> Result<Config, ConfigError>`.
+  `label::render(metric: Metric, percent: u8) -> Option<[u8; 1600]>` (a 20×20 ARGB32 pixmap, `None`
+  above 100; done in [the label-renderer plan](2026-11-18-rust-statsbar-02b-label-renderer.md));
+  `config::parse(text: &str) -> Result<Config, ConfigError>`.
 - **Readers:** `cpu::read(root: &Path) -> io::Result<Vec<CoreTicks>>`, `memory::read(root: &Path) -> io::Result<MemInfo>`.
 - **Tests:** fixture trees for both readers, including a missing file and a truncated one; scheduler
-  table covering hidden, visible, page-open and power-saver; a golden pixmap for `"100%"`.
+  table covering hidden, visible, page-open and power-saver; label tests: CPU at 100 % pinned
+  to the GNOME probe's 20×20 frame, RAM sharing CPU's percentage pixels under its own label, every
+  value 0–100 distinct, each single digit drawn, and values above 100 rejected.
 - **Evidence:** screenshot of the panel showing live CPU % and memory %; toggling a switch removes the
   item and `strace -c` shows its file is no longer read; `ps -T` shows only the threads the invariant
-  allows.
+  allows. This check waits on the thread-invariant decision the user deferred: S2 already measured
+  more threads than the current wording allows.
 
 ### Plan 03 — Battery, fans (read-only), network label
 - **Scope:** `BAT0`, `AC`, `dell_smm` readers; default-route interface and its counters; three more
