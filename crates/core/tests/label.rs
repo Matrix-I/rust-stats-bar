@@ -152,7 +152,7 @@ fn every_pixel_is_transparent_or_opaque_white() {
             for (index, pixel) in pixmap.chunks_exact(4).enumerate() {
                 assert!(
                     pixel == [0; 4] || pixel == [255; 4],
-                    "{percent}% pixel {index}: {pixel:?}"
+                    "{metric:?} {percent}% pixel {index}: {pixel:?}"
                 );
             }
         }
