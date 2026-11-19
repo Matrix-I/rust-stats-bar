@@ -231,22 +231,29 @@ task. "Evidence" is what its end-to-end check must show.
   [02b probe](../spikes/2026-11-18-02b-system-font.md) compared a system font and the Stats Mini
   arrangement. The thread invariant was reworded from S2's measurements on 2026-11-18.
 
-### Plan 02b — Daemon skeleton, first vertical slice
-- **Scope:** the config file, the scheduler, the worker thread, the label renderer, the hub item with
+### Plan 02b — Daemon skeleton, first vertical slice *(written: `docs/plans/2026-11-18-rust-statsbar-02b-daemon.md`)*
+- **Scope:** the config file, the scheduler, the worker thread (moved to Plan 05), the label renderer, the hub item with
   show/hide switches, launch at login, and CPU and Memory as tray items with summary menus. Written
   after Plan 02a, against its results.
-- **Core additions (pure, tested):** `schedule::due(now_nanos, &[ReaderState]) -> Vec<ReaderId>`;
+- **Core additions (pure, tested):**
+  `schedule::due(now_nanos, power_saver, &[ReaderState]) -> Vec<ReaderId>`;
   `label::render(metric: Metric, percent: u8) -> Option<[u8; 1600]>` (a 20×20 ARGB32 pixmap, `None`
-  above 100; done in [the label-renderer plan](2026-11-18-rust-statsbar-02b-label-renderer.md));
-  `config::parse(text: &str) -> Result<Config, ConfigError>`.
-- **Readers:** `cpu::read(root: &Path) -> io::Result<Vec<CoreTicks>>`, `memory::read(root: &Path) -> io::Result<MemInfo>`.
+  above 100; done in [the label-renderer plan](2026-11-18-rust-statsbar-02b-label-renderer.md)).
+- **Daemon:** `config::parse(text: &str) -> Result<Config, ConfigError>`.
+- **Readers:** `CpuReader::open(root)?.read() -> io::Result<Vec<CoreTicks>>`,
+  `MemoryReader::open(root)?.read() -> io::Result<MemInfo>`; each keeps its file open between reads.
 - **Tests:** fixture trees for both readers, including a missing file and a truncated one; scheduler
   table covering hidden, visible, page-open and power-saver; label tests: CPU at 100 % pinned
   to the GNOME probe's 20×20 frame, RAM sharing CPU's percentage pixels under its own label, every
   value 0–100 distinct, each single digit drawn, and values above 100 rejected.
-- **Evidence:** screenshot of the panel showing live CPU % and memory %; toggling a switch removes the
-  item and `strace -c` shows its file is no longer read; `ps -T` shows only the threads the invariant
-  allows. Written: [the daemon plan](2026-11-18-rust-statsbar-02b-daemon.md). The worker thread moves
+- **Evidence:** [the end-to-end run](../spikes/2026-11-18-02b-daemon-e2e.md). The user confirmed
+  live CPU and Memory labels in the panel, within one sample of `top` and `free`; no screenshot, as
+  the portal failed. Unticking *Show CPU* removed the item, and `strace -y` showed `/proc/stat`
+  closed with no read after it. `ps -T` showed 4 threads, as the invariant allows, at Pss 2657 kB.
+  Power Saver stretched reads from 2 s to 5 s. One GNOME click was lost once and not reproduced;
+  its likely cause (a menu layout change at startup) was fixed after the run and rechecked over
+  D-Bus only.
+  Written: [the daemon plan](2026-11-18-rust-statsbar-02b-daemon.md). The worker thread moves
   to Plan 05; config parsing lives in the daemon crate, since `toml` cannot enter `core`.
 
 ### Plan 03 — Battery, fans (read-only), network label
@@ -271,8 +278,8 @@ task. "Evidence" is what its end-to-end check must show.
   `statsbar-panel` process and the daemon back at its 2 s cadence.
 
 ### Plan 05 — Battery and Network pages
-- **Scope:** battery detail page; NetworkManager reader; Wi-Fi details; DNS; ping; public IP on the
-  worker thread; the worker thread (moved from 02b), with the public IP lookup as its first caller.
+- **Scope:** battery detail page; NetworkManager reader; Wi-Fi details; DNS; ping; public IP; the
+  worker thread (moved from 02b), with the public IP lookup as its first caller.
 - **Tests:** NetworkManager property maps → `NetworkInfo` (wired, Wi-Fi, disconnected, no IPv6);
   frequency → band and channel; `ping::stats(&[f64]) -> (mean, jitter)`; public-IP replies that are
   empty, oversized or not an address.

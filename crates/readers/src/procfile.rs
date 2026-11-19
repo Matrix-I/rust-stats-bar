@@ -5,7 +5,7 @@ use std::path::Path;
 
 /// procfs reports a size of 0, so the length is only known by reading to the end. The cap stops a
 /// corrupt file from growing the buffer without bound. /proc/stat on this 8-thread laptop is
-/// about 3 KiB and /proc/meminfo about 1.5 KiB.
+/// about 4.6 KiB and /proc/meminfo about 1.6 KiB.
 const MAX_BYTES: usize = 256 * 1024;
 const CHUNK: usize = 4096;
 

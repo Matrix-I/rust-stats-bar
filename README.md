@@ -3,7 +3,7 @@
 A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardware figures in the
 panel, details one click away, built to cost as little CPU and memory as possible.
 
-Status: the pure core only. Nothing runs yet. See `docs/plans/` for the roadmap.
+Status: CPU and Memory in the tray (statsbard); run with `cargo run --release -p statsbard`.
 
 ## Development
 
@@ -29,6 +29,10 @@ reader, which hands plain values to the core.
   against the Stats Mini layout in the panel.
 - [Plan 02b — label renderer](docs/plans/2026-11-18-rust-statsbar-02b-label-renderer.md): the pure
   20×20 CPU and RAM label renderer in `crates/core`.
+- [Plan 02b — daemon](docs/plans/2026-11-18-rust-statsbar-02b-daemon.md): config, scheduler,
+  `/proc` readers, the hub with show/hide switches, launch at login, and the CPU and Memory items.
+- [Plan 02b — end-to-end run](docs/spikes/2026-11-18-02b-daemon-e2e.md): the daemon checked in the
+  GNOME panel.
 
 ## License
 
