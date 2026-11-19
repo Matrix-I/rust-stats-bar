@@ -159,7 +159,7 @@ These come from the roadmap and the user's global rules. The roadmap wins on pro
     `Written: [the daemon plan](2026-11-18-rust-statsbar-02b-daemon.md). The worker thread moves to Plan 05; config parsing lives in the daemon crate, since \`toml\` cannot enter \`core\`.`
   - Plan 05 Scope: append `the worker thread (moved from 02b), with the public IP lookup as its first caller;`.
 - [x] **Step 4: Tick 02a Step 3.** In `2026-11-17-rust-statsbar-02a-spikes.md`, change
-  `- [x] **Step 3: Record S2's outcome` to `- [x]` and append under it:
+  `- [ ] **Step 3: Record S2's outcome` to `- [x]` and append under it:
   `Executed 2026-11-18: the user approved the wording; blocking-1 was recorded as present after 30 s.`
   On line 894 of the same file, replace `The user deferred changing the project invariant.` with
   `The user approved the reworded invariant on 2026-11-18.`
@@ -2925,9 +2925,9 @@ Ready to commit: `crates/daemon/src/run.rs crates/daemon/src/main.rs crates/daem
 **Files:** `README.md`, `docs/plans/2026-11-16-rust-statsbar-roadmap.md`, a new
 `docs/spikes/2026-11-18-02b-daemon-e2e.md`, and this plan's checkboxes.
 
-- [ ] **Step 1: Full suite.** Run `./scripts/check.sh` and expect it green. Quote the test totals.
+- [x] **Step 1: Full suite.** Run `./scripts/check.sh` and expect it green. Quote the test totals.
   Then run `cargo build --release -p statsbard` and `cargo audit`.
-- [ ] **Step 2: End-to-end run, with the user present.** The real panel is the only way to see the
+- [x] **Step 2: End-to-end run, with the user present.** The real panel is the only way to see the
   items. Use a scratch config home, so the user's `~/.config` is untouched. Record each result in
   a new `docs/spikes/2026-11-18-02b-daemon-e2e.md`:
   1. `export XDG_CONFIG_HOME="$(mktemp -d)"`, then
@@ -2959,7 +2959,7 @@ Ready to commit: `crates/daemon/src/run.rs crates/daemon/src/main.rs crates/daem
      `pread64` timestamps on `</proc/meminfo>` to go from 2 s to 5 s apart. Ask the user to
      switch back.
   9. **Quit:** from the hub. Expect the items to vanish and the process to exit with code 0.
-- [ ] **Step 3: Docs.**
+- [x] **Step 3: Docs.**
   - README: change `Status:` to
     `Status: CPU and Memory in the tray (statsbard); run with \`cargo run --release -p statsbard\`.`
     Add a Plans bullet for this plan and one for the e2e results document.
@@ -2969,7 +2969,7 @@ Ready to commit: `crates/daemon/src/run.rs crates/daemon/src/main.rs crates/daem
     `schedule::due(now_nanos, power_saver, &[ReaderState])`, `CpuReader::open(root)?.read()` and
     `MemoryReader::open(root)?.read()`. Move `config::parse` from the core list to the daemon.
   - Tick this plan's boxes.
-- [ ] **Step 4: Final gate** (global rules):
+- [x] **Step 4: Final gate** (global rules):
   1. Read `git diff main...HEAD`, with untracked files included. Expect nothing unrelated, no
      debug output, no TODOs, no commented-out code and no secrets.
   2. Rerun `./scripts/check.sh`.
@@ -2979,7 +2979,7 @@ Ready to commit: `crates/daemon/src/run.rs crates/daemon/src/main.rs crates/daem
      hot-path allocation beyond the menu rows; timeouts; naming.
   4. Run `code-review-strict` on the branch, then fix or report each finding.
   5. If anything changed, repeat from 1.
-- [ ] **Step 5: Report the gaps.**
+- [x] **Step 5: Report the gaps.**
   - `run.rs` is covered only by the end-to-end run.
   - Launch at login was not tested across a real login.
   - The thread count is one 30 s sample, and Plan 11 measures longer.
