@@ -41,6 +41,12 @@ fn exec_value(exe: &Path) -> io::Result<String> {
     if text.chars().any(char::is_control) {
         return Err(refuse("contains a control character"));
     }
+    // What /proc/self/exe reads once the running binary has been replaced, as by an upgrade.
+    if text.ends_with(" (deleted)") {
+        return Err(refuse(
+            "the running binary was replaced; restart StatsBar first",
+        ));
+    }
     // Inside quotes, `"`, `` ` ``, `$` and `\` take a backslash. The general string escaping runs
     // before the quoting rule and halves every `\\`, so each of those backslashes is written
     // twice. `%` would start a field code. Every character escaped here is also in RESERVED, so
