@@ -54,6 +54,14 @@ fn the_hub_menu_lists_rows_switches_and_quit() {
     );
 }
 
+/// The first refresh then only relabels rows. Adding rows would change the layout, which makes
+/// ksni renumber every menu id, so a click the panel sends with an old id would be lost.
+#[test]
+fn a_new_hub_already_has_a_row_for_each_shown_metric() {
+    let (hub, _receiver) = hub(8);
+    assert_eq!(labels(&hub.menu())[..3], ["CPU —", "---", "[x] Show CPU"]);
+}
+
 #[test]
 fn hub_rows_are_not_clickable() {
     let (mut hub, _receiver) = hub(8);

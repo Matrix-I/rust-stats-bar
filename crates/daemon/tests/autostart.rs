@@ -75,6 +75,15 @@ fn a_relative_path_or_a_control_character_is_refused() {
     }
 }
 
+/// Linux appends " (deleted)" to /proc/self/exe once the running binary is replaced, for example
+/// by an upgrade. That path starts nothing at the next login.
+#[test]
+fn a_replaced_binary_is_refused() {
+    let error =
+        desktop_entry(Path::new("/home/u/.cargo/bin/statsbard (deleted)")).expect_err("refused");
+    assert_eq!(error.kind(), ErrorKind::InvalidInput);
+}
+
 #[test]
 fn enable_then_disable_round_trips_and_disable_twice_is_fine() {
     let path = scratch("autostart").join("autostart/statsbar.desktop");

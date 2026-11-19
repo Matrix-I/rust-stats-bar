@@ -9,6 +9,7 @@ use ksni::{Category, Icon, MenuItem};
 use statsbar_core::label::{self, Metric};
 
 use crate::app::Command;
+use crate::summary;
 
 /// Shown before a metric's first value, and as the hub's icon.
 pub const FALLBACK_ICON: &str = "utilities-system-monitor";
@@ -110,7 +111,10 @@ impl Hub {
         launch_at_login: bool,
     ) -> Hub {
         Hub {
-            rows: Vec::new(),
+            // Placeholders now, so the first values only relabel rows. Adding rows later would
+            // change the layout, which makes ksni renumber every menu id and lose a click sent
+            // with an old one.
+            rows: summary::hub_rows(None, None, show_cpu, show_memory),
             show_cpu,
             show_memory,
             launch_at_login,
