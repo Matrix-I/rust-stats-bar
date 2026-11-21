@@ -334,7 +334,15 @@ impl Daemon {
             )
             .map(|reading| {
                 app.record_battery(now, &reading.info, reading.adapter_online)
-                    .map(|(metric, value)| percent_look(id, metric, value))
+                    .map(|label| {
+                        // Interim until the tray shows a themed icon and a text label.
+                        let word = if label.charging {
+                            Metric::Chg
+                        } else {
+                            Metric::Bat
+                        };
+                        percent_look(id, word, label.percent)
+                    })
             }),
             ReaderId::Fan => read_with(&mut readers.fan, || FanReader::open(root), FanReader::read)
                 .map(|speed| {
