@@ -13,6 +13,8 @@ ksni = { version = "=0.3.7", default-features = false, features = ["async-io"] }
 zbus = { version = "=5.19.0", default-features = false, features = ["async-io"] }
 async-io = "=2.6.0"
 futures-lite = "=2.6.1"
+# Spike S3 draws with the real renderer; statsbar-core has no dependencies of its own.
+statsbar-core = { path = "../../crates/core" }
 
 [profile.release]
 opt-level = "s"
