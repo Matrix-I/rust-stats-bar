@@ -1,11 +1,10 @@
 use statsbar_core::battery::{BatteryInfo, ChargeStatus};
 use statsbar_core::cpu::CoreTicks;
 use statsbar_core::fan::FanSpeed;
-use statsbar_core::label::Metric;
 use statsbar_core::memory::MemInfo;
 use statsbar_core::schedule::ReaderId::{self, Battery, Cpu, Fan, Memory, Network};
 use statsbar_core::throughput::Sample;
-use statsbard::app::{App, READERS};
+use statsbard::app::{App, BatteryLabel, READERS};
 use statsbard::config::{Config, Items};
 use statsbard::summary;
 
@@ -52,8 +51,12 @@ fn wlo1(rx_bytes: u64, tx_bytes: u64) -> Sample {
     }
 }
 
-fn texts(upload: &str, download: &str) -> Option<(String, String)> {
-    Some((upload.to_owned(), download.to_owned()))
+fn download(text: &str) -> Option<String> {
+    Some(text.to_owned())
+}
+
+fn battery_label(percent: u8, charging: bool) -> Option<BatteryLabel> {
+    Some(BatteryLabel { percent, charging })
 }
 
 fn ticks(user: u64, idle: u64) -> Vec<CoreTicks> {
@@ -192,12 +195,12 @@ fn every_item_is_due_at_start_in_hub_order() {
 }
 
 #[test]
-fn the_battery_label_says_chg_only_while_charging() {
+fn the_battery_label_has_the_bolt_only_while_charging() {
     let mut app = only(&[Battery]);
     use ChargeStatus::{Charging, Discharging, NotCharging};
     assert_eq!(
         app.record_battery(0, &battery(Discharging, 76), Some(false)),
-        Some((Metric::Bat, 76))
+        battery_label(76, false)
     );
     assert_eq!(
         app.record_battery(2 * SECOND, &battery(Discharging, 76), Some(false)),
@@ -205,15 +208,24 @@ fn the_battery_label_says_chg_only_while_charging() {
     );
     assert_eq!(
         app.record_battery(4 * SECOND, &battery(Charging, 76), Some(true)),
-        Some((Metric::Chg, 76))
+        battery_label(76, true)
     );
     assert_eq!(
         app.record_battery(6 * SECOND, &battery(NotCharging, 76), Some(true)),
-        Some((Metric::Bat, 76))
+        battery_label(76, false)
     );
     assert_eq!(
-        app.record_battery(8 * SECOND, &battery(NotCharging, 77), Some(true)),
-        Some((Metric::Bat, 77))
+        app.record_battery(8 * SECOND, &battery(NotCharging, 76), Some(true)),
+        None,
+        "Not charging and Discharging look the same, so the status alone redraws nothing"
+    );
+    assert_eq!(
+        app.record_battery(10 * SECOND, &battery(Discharging, 76), Some(false)),
+        None
+    );
+    assert_eq!(
+        app.record_battery(12 * SECOND, &battery(NotCharging, 77), Some(true)),
+        battery_label(77, false)
     );
     assert_eq!(
         app.battery().map(|figures| figures.adapter_online),
@@ -247,18 +259,34 @@ fn a_fan_without_a_range_keeps_its_rows_but_draws_no_label() {
 }
 
 #[test]
-fn the_network_label_follows_its_rate_texts() {
+fn the_network_label_follows_its_download_text() {
     let mut app = only(&[Network]);
-    assert_eq!(app.record_network(0, Some(&wlo1(0, 0))), texts("0B", "0B"));
+    assert_eq!(app.record_network(0, Some(&wlo1(0, 0))), download("0B"));
     assert_eq!(
         app.record_network(2 * SECOND, Some(&wlo1(24_000, 2_000))),
-        texts("1K", "12K")
+        download("12K")
     );
     assert_eq!(
         app.record_network(4 * SECOND, Some(&wlo1(48_000, 4_000))),
         None
     );
     assert_eq!(app.rows(Network)[0], "Interface wlo1");
+}
+
+#[test]
+fn an_upload_change_redraws_the_title_but_keeps_the_download_label() {
+    let mut app = only(&[Network]);
+    app.record_network(0, Some(&wlo1(0, 0)));
+    app.record_network(2 * SECOND, Some(&wlo1(24_000, 2_000)));
+    // Upload goes from 1.0 to 2.0 KB/s; download stays at 12 KB/s.
+    assert_eq!(
+        app.record_network(4 * SECOND, Some(&wlo1(48_000, 6_000))),
+        download("12K")
+    );
+    assert_eq!(
+        summary::network_title(&app.network().expect("sampled").reading),
+        "Network ↓ 12.0 KB/s ↑ 2.0 KB/s"
+    );
 }
 
 #[test]
@@ -269,7 +297,7 @@ fn a_rate_change_too_small_for_the_label_still_redraws_the_title() {
     // 12.1 KB/s still draws "12K", but the title reads "↓ 12.1 KB/s" instead of "↓ 12.0 KB/s".
     assert_eq!(
         app.record_network(4 * SECOND, Some(&wlo1(48_200, 4_000))),
-        texts("1K", "12K")
+        download("12K")
     );
     assert_eq!(
         summary::network_title(&app.network().expect("sampled").reading),
@@ -282,7 +310,7 @@ fn no_default_route_reads_as_no_interface_and_zero_rates() {
     let mut app = only(&[Network]);
     app.record_network(0, Some(&wlo1(0, 0)));
     app.record_network(2 * SECOND, Some(&wlo1(24_000, 0)));
-    assert_eq!(app.record_network(4 * SECOND, None), texts("0B", "0B"));
+    assert_eq!(app.record_network(4 * SECOND, None), download("0B"));
     assert_eq!(
         app.rows(Network),
         [
@@ -326,7 +354,7 @@ fn hiding_the_battery_drops_its_figures_and_label() {
     assert_eq!(app.battery(), None);
     assert_eq!(
         app.record_battery(2 * SECOND, &battery(ChargeStatus::Discharging, 76), None),
-        Some((Metric::Bat, 76)),
+        battery_label(76, false),
         "shown again, the same value is drawn again"
     );
 }

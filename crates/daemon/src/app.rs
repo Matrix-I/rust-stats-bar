@@ -4,7 +4,7 @@
 use statsbar_core::battery::{BatteryFigures, BatteryInfo, ChargeStatus};
 use statsbar_core::cpu::{CoreTicks, CpuLoad};
 use statsbar_core::fan::{self, FanSpeed};
-use statsbar_core::label::{self, Metric};
+use statsbar_core::label;
 use statsbar_core::memory::{MemInfo, MemoryBuckets};
 use statsbar_core::schedule::{self, ReaderId, ReaderState};
 use statsbar_core::throughput::{Reading, Sample, ThroughputTracker};
@@ -29,8 +29,13 @@ pub enum Command {
     Quit,
 }
 
-/// The network label's texts: upload, then download.
-pub type RateLabel = (String, String);
+/// What the battery's tray label shows: the charge, and whether its icon has the charging bolt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatteryLabel {
+    pub percent: u8,
+    /// Only the kernel's `Charging` status shows the bolt.
+    pub charging: bool,
+}
 
 /// The network figures of the last sample.
 #[derive(Debug, Clone, PartialEq)]
@@ -53,13 +58,13 @@ pub struct App {
     memory: Option<MemoryBuckets>,
     memory_label: Option<u8>,
     battery: Option<BatteryFigures>,
-    battery_label: Option<(Metric, u8)>,
+    battery_label: Option<BatteryLabel>,
     fan: Option<FanSpeed>,
     fan_label: Option<u8>,
     throughput: ThroughputTracker,
     network: Option<NetworkStatus>,
-    /// The label's texts and the item's title, as last drawn.
-    network_label: Option<(RateLabel, String)>,
+    /// The label's download text and the item's title, as last drawn.
+    network_label: Option<(String, String)>,
 }
 
 /// Where `id` sits in `READERS`, and in every per-reader array.
@@ -191,23 +196,22 @@ impl App {
         changed(&mut self.memory_label, value)
     }
 
-    /// Takes a battery sample. Returns the new label when its word or its percent changed: `CHG`
-    /// while charging and `BAT` otherwise (requirement 2).
+    /// Takes a battery sample. Returns the new label when its percent or its charging bolt
+    /// changed.
     pub fn record_battery(
         &mut self,
         now_nanos: u64,
         info: &BatteryInfo,
         adapter_online: Option<bool>,
-    ) -> Option<(Metric, u8)> {
+    ) -> Option<BatteryLabel> {
         self.mark_read(ReaderId::Battery, now_nanos);
         let figures = BatteryFigures::new(info, adapter_online);
-        let word = if figures.status == ChargeStatus::Charging {
-            Metric::Chg
-        } else {
-            Metric::Bat
+        let label = BatteryLabel {
+            percent: figures.percent,
+            charging: figures.status == ChargeStatus::Charging,
         };
         self.battery = Some(figures);
-        changed(&mut self.battery_label, (word, figures.percent))
+        changed(&mut self.battery_label, label)
     }
 
     /// Takes a fan sample. Returns the new label value, its share of the fan's range clamped at
@@ -219,25 +223,24 @@ impl App {
         changed(&mut self.fan_label, value)
     }
 
-    /// Takes a network sample, `None` when there is no default route. Returns the label's texts
-    /// when they or the item's title changed. The title has finer rates than the label, and it
-    /// must stay as current as the hub row that repeats it.
-    pub fn record_network(&mut self, now_nanos: u64, sample: Option<&Sample>) -> Option<RateLabel> {
+    /// Takes a network sample, `None` when there is no default route. Returns the label's
+    /// download text when it or the item's title changed. The title carries both rates, finer
+    /// than the label, and it must stay as current as the hub row that repeats it.
+    pub fn record_network(&mut self, now_nanos: u64, sample: Option<&Sample>) -> Option<String> {
         self.mark_read(ReaderId::Network, now_nanos);
         let reading = self.throughput.update(sample, now_nanos);
         self.network = Some(NetworkStatus {
             interface: sample.map(|sample| sample.interface.clone()),
             reading,
         });
-        let texts = (
-            label::rate_text(reading.upload_rate),
-            label::rate_text(reading.download_rate),
-        );
         changed(
             &mut self.network_label,
-            (texts, summary::network_title(&reading)),
+            (
+                label::rate_text(reading.download_rate),
+                summary::network_title(&reading),
+            ),
         )
-        .map(|(texts, _)| texts)
+        .map(|(download, _)| download)
     }
 
     /// A failed read still counts as a read, so a broken file is retried each interval, not in a
