@@ -45,6 +45,9 @@ The larger pixmaps were sharper. The user still found them too small to read, be
 20 device pixels. Variant D was the only bold attempt. A bolder 20×20 font was not drawn, since
 even the sharpest variant was too small to read.
 
+Plan 03b removed the renderer and this probe. To rerun it, check out a30a747 and build
+`spikes/tray` there.
+
 ## Text drawn by the shell
 
 The extension reads the optional `XAyatanaLabel` property and shows it as an `St.Label` next to the
@@ -66,5 +69,6 @@ The text looked as crisp as the battery indicator's own `80%`.
 list. It cannot publish `XAyatanaLabel`. Using the chosen design needs either a patched `ksni`
 or our own StatusNotifierItem service on `zbus`, which the daemon already depends on.
 
-**Decision:** pending. The user chose the icon-plus-number look. How to publish the label, and what
-happens to the pixmap labels from Plans 02b and 03, is a roadmap decision.
+**Decision (2026-11-21):** Plan 03b publishes the label through a vendored `ksni` 0.3.7 patched
+with `XAyatanaLabel` (`vendor/ksni/PATCHES.md`), and removes the pixmap labels of Plans 02b
+and 03.
