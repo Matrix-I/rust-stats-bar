@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/core", "crates/readers", "crates/daemon"]
+# The patched ksni (vendor/ksni/PATCHES.md) is a path dependency, not a member, so upstream's
+# code keeps upstream's formatting and is not held to this workspace's lints.
+exclude = ["vendor/ksni"]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,6 +17,10 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
+
+# ksni 0.3.7 cannot publish XAyatanaLabel; this copy adds it (spike S3, Plan 03b).
+[patch.crates-io]
+ksni = { path = "vendor/ksni" }
 
 # The daemon runs for the whole session, so the release build is tuned for a small resident
 # set first and speed second: one codegen unit and fat LTO let dead code be dropped across
