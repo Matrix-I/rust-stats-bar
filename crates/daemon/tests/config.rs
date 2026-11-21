@@ -16,7 +16,11 @@ fn scratch(name: &str) -> PathBuf {
 
 fn shown(cpu: bool, memory: bool) -> Config {
     Config {
-        items: Items { cpu, memory },
+        items: Items {
+            cpu,
+            memory,
+            ..Items::default()
+        },
     }
 }
 
@@ -153,4 +157,52 @@ fn persist_saves_when_the_file_was_writable_at_load() {
     let path = scratch("config-persist").join("config.toml");
     config::persist(&path, &shown(false, true), true).expect("saved");
     assert_eq!(config::load(&path).config, shown(false, true));
+}
+
+#[test]
+fn the_new_items_are_shown_by_default_and_can_be_hidden() {
+    let defaults = config::parse("").expect("empty is valid").items;
+    assert!(defaults.battery && defaults.fan && defaults.network);
+    let hidden = config::parse("[items]\nbattery = false\nfan = false\nnetwork = false\n")
+        .expect("valid")
+        .items;
+    assert!(!hidden.battery && !hidden.fan && !hidden.network);
+    assert!(hidden.cpu && hidden.memory);
+}
+
+#[test]
+fn saving_writes_every_item_key() {
+    let config = Config {
+        items: Items {
+            cpu: true,
+            memory: false,
+            battery: false,
+            fan: true,
+            network: false,
+        },
+    };
+    let text = config::update_text("", &config).expect("valid input");
+    let table: toml::Table = text.parse().expect("output is TOML");
+    let items = &table["items"];
+    for (key, expected) in [
+        ("cpu", true),
+        ("memory", false),
+        ("battery", false),
+        ("fan", true),
+        ("network", false),
+    ] {
+        assert_eq!(items[key].as_bool(), Some(expected), "{key}");
+    }
+}
+
+#[test]
+fn each_reader_has_its_own_switch() {
+    use statsbard::app::READERS;
+    for id in READERS {
+        let mut items = Items::default();
+        items.set_shown(id, false);
+        for other in READERS {
+            assert_eq!(items.shown(other), other != id, "{id:?} then {other:?}");
+        }
+    }
 }

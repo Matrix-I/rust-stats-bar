@@ -1,12 +1,22 @@
 use ksni::Tray;
 use ksni::menu::MenuItem;
 use statsbar_core::label::{self, Metric};
+use statsbar_core::schedule::ReaderId;
 use statsbard::app::Command;
+use statsbard::app::READERS;
+use statsbard::config::Items;
 use statsbard::tray::{self, FALLBACK_ICON, Hub, MetricItem};
 
 fn hub(capacity: usize) -> (Hub, async_channel::Receiver<Command>) {
     let (sender, receiver) = async_channel::bounded(capacity);
-    (Hub::new(sender, true, false, true), receiver)
+    let items = Items {
+        cpu: true,
+        memory: false,
+        battery: true,
+        fan: false,
+        network: true,
+    };
+    (Hub::new(sender, items, true), receiver)
 }
 
 fn labels<T>(menu: &[MenuItem<T>]) -> Vec<String> {
@@ -46,6 +56,9 @@ fn the_hub_menu_lists_rows_switches_and_quit() {
             "---",
             "[x] Show CPU",
             "[ ] Show Memory",
+            "[x] Show Battery",
+            "[ ] Show Fan",
+            "[x] Show Network",
             "---",
             "[x] Launch at login",
             "---",
@@ -59,7 +72,10 @@ fn the_hub_menu_lists_rows_switches_and_quit() {
 #[test]
 fn a_new_hub_already_has_a_row_for_each_shown_metric() {
     let (hub, _receiver) = hub(8);
-    assert_eq!(labels(&hub.menu())[..3], ["CPU —", "---", "[x] Show CPU"]);
+    assert_eq!(
+        labels(&hub.menu())[..5],
+        ["CPU —", "Battery —", "Network —", "---", "[x] Show CPU"]
+    );
 }
 
 #[test]
@@ -76,8 +92,11 @@ fn hub_rows_are_not_clickable() {
 fn each_switch_and_quit_send_their_command() {
     let (mut hub, receiver) = hub(8);
     for (label, expected) in [
-        ("Show CPU", Command::ToggleCpu),
-        ("Show Memory", Command::ToggleMemory),
+        ("Show CPU", Command::Toggle(ReaderId::Cpu)),
+        ("Show Memory", Command::Toggle(ReaderId::Memory)),
+        ("Show Battery", Command::Toggle(ReaderId::Battery)),
+        ("Show Fan", Command::Toggle(ReaderId::Fan)),
+        ("Show Network", Command::Toggle(ReaderId::Network)),
         ("Launch at login", Command::ToggleLaunchAtLogin),
         ("Quit", Command::Quit),
     ] {
@@ -97,7 +116,7 @@ fn a_full_command_queue_drops_the_click_instead_of_blocking_the_tray_thread() {
 
 #[test]
 fn a_metric_item_shows_a_themed_icon_until_its_first_value() {
-    let mut item = MetricItem::new(Metric::Cpu);
+    let mut item = MetricItem::new(ReaderId::Cpu);
     assert_eq!(item.icon_name(), FALLBACK_ICON);
     assert!(item.icon_pixmap().is_empty());
 
@@ -119,9 +138,18 @@ fn an_icon_above_100_is_refused() {
 
 #[test]
 fn metric_item_ids_are_stable_and_rows_are_not_clickable() {
-    assert_eq!(MetricItem::new(Metric::Cpu).id(), "statsbar-cpu");
-    let mut memory = MetricItem::new(Metric::Ram);
-    assert_eq!(memory.id(), "statsbar-memory");
+    let ids: Vec<String> = READERS.map(|id| MetricItem::new(id).id()).to_vec();
+    assert_eq!(
+        ids,
+        [
+            "statsbar-cpu",
+            "statsbar-memory",
+            "statsbar-battery",
+            "statsbar-fan",
+            "statsbar-network",
+        ]
+    );
+    let mut memory = MetricItem::new(ReaderId::Memory);
     memory.rows = vec!["App 6.00 GB".to_owned()];
     match &memory.menu()[0] {
         MenuItem::Standard(item) => {
@@ -130,4 +158,11 @@ fn metric_item_ids_are_stable_and_rows_are_not_clickable() {
         }
         other => panic!("expected a row, got {other:?}"),
     }
+}
+
+#[test]
+fn the_rates_icon_is_the_two_line_label() {
+    let icon = tray::rates_icon(12_000.0, 0.0);
+    assert_eq!((icon.width, icon.height), (20, 20));
+    assert_eq!(icon.data, label::render_rates(12_000.0, 0.0).to_vec());
 }

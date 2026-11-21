@@ -14,6 +14,9 @@ pub const POWER_SAVER_INTERVAL_NANOS: u64 = 5 * NANOS_PER_SECOND;
 pub enum ReaderId {
     Cpu,
     Memory,
+    Battery,
+    Fan,
+    Network,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

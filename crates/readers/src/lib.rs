@@ -4,6 +4,9 @@
 //! a read instead of an open, a read and a close. Readers take the filesystem root as an argument
 //! (`/` in production), which lets the tests run them against fixture trees.
 
+pub mod battery;
 pub mod cpu;
+pub mod fan;
 pub mod memory;
+pub mod network;
 mod procfile;
