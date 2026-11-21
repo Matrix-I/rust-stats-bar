@@ -10,10 +10,8 @@ use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use futures_lite::{StreamExt, future};
-use ksni::{Handle, Icon, TrayMethods};
-use statsbar_core::label::Metric;
+use ksni::{Handle, TrayMethods};
 use statsbar_core::schedule::ReaderId;
-use statsbar_core::throughput::Reading;
 use statsbar_readers::battery::BatteryReader;
 use statsbar_readers::cpu::CpuReader;
 use statsbar_readers::fan::FanReader;
@@ -23,7 +21,7 @@ use statsbar_readers::network::NetworkReader;
 use crate::app::{App, Command, READERS, slot};
 use crate::config::Items;
 use crate::power::{ProfileWatch, is_power_saver};
-use crate::tray::{self, Hub, MetricItem};
+use crate::tray::{Hub, Look, MetricItem, battery_look, network_look, percent_look};
 use crate::{autostart, config, paths, summary};
 
 pub type BoxError = Box<dyn Error>;
@@ -51,23 +49,6 @@ async fn bounded<T>(
 
 fn elapsed_nanos(start: Instant) -> u64 {
     u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX)
-}
-
-/// A label to draw: the pixmap and the item's title.
-type Look = (Option<Icon>, String);
-
-fn percent_look(id: ReaderId, metric: Metric, value: u8) -> Look {
-    (
-        tray::icon(metric, value),
-        summary::title(tray::name(id), Some(value)),
-    )
-}
-
-fn rates_look(reading: &Reading) -> Look {
-    (
-        Some(tray::rates_icon(reading.upload_rate, reading.download_rate)),
-        summary::network_title(reading),
-    )
 }
 
 /// Reuses the open reader, or opens one, then reads it. A failed read leaves the reader in its
@@ -316,7 +297,7 @@ impl Daemon {
             ReaderId::Cpu => read_with(&mut readers.cpu, || CpuReader::open(root), CpuReader::read)
                 .map(|ticks| {
                     app.record_cpu(now, ticks)
-                        .map(|value| percent_look(id, Metric::Cpu, value))
+                        .map(|value| percent_look(id, value))
                 }),
             ReaderId::Memory => read_with(
                 &mut readers.memory,
@@ -325,7 +306,7 @@ impl Daemon {
             )
             .map(|info| {
                 app.record_memory(now, &info)
-                    .map(|value| percent_look(id, Metric::Ram, value))
+                    .map(|value| percent_look(id, value))
             }),
             ReaderId::Battery => read_with(
                 &mut readers.battery,
@@ -334,20 +315,12 @@ impl Daemon {
             )
             .map(|reading| {
                 app.record_battery(now, &reading.info, reading.adapter_online)
-                    .map(|label| {
-                        // Interim until the tray shows a themed icon and a text label.
-                        let word = if label.charging {
-                            Metric::Chg
-                        } else {
-                            Metric::Bat
-                        };
-                        percent_look(id, word, label.percent)
-                    })
+                    .map(battery_look)
             }),
             ReaderId::Fan => read_with(&mut readers.fan, || FanReader::open(root), FanReader::read)
                 .map(|speed| {
                     app.record_fan(now, speed)
-                        .map(|value| percent_look(id, Metric::Fan, value))
+                        .map(|value| percent_look(id, value))
                 }),
             ReaderId::Network => read_with(
                 &mut readers.network,
@@ -355,8 +328,9 @@ impl Daemon {
                 NetworkReader::read,
             )
             .map(|sample| {
-                app.record_network(now, sample.as_ref())?;
-                app.network().map(|status| rates_look(&status.reading))
+                let download = app.record_network(now, sample.as_ref())?;
+                app.network()
+                    .map(|status| network_look(&download, &status.reading))
             }),
         };
         match result {
@@ -379,17 +353,19 @@ impl Daemon {
             return;
         };
         let rows = self.app.rows(id);
-        // A missed update is not retried. The rows are resent on the next sample, but the icon and
-        // title only when the label changes again, because `App` has already recorded the new
-        // value. A 1 s stall on `ksni`'s lock is itself worth investigating, and the log shows it.
+        // A missed update is not retried. The rows are resent on the next sample, but the icon,
+        // label and title only when the label changes again, because `App` has already recorded
+        // the new value. A 1 s stall on `ksni`'s lock is itself worth investigating, and the log
+        // shows it.
         update(
             handle,
             "metric item update",
             move |item: &mut MetricItem| {
                 item.rows = rows;
-                if let Some((icon, title)) = redraw {
-                    item.icon = icon;
-                    item.title = title;
+                if let Some(look) = redraw {
+                    item.icon = look.icon;
+                    item.label = look.label;
+                    item.title = look.title;
                 }
             },
         )
