@@ -38,6 +38,9 @@ reader, which hands plain values to the core.
 - [Plan 03 — end-to-end run](docs/spikes/2026-11-19-03-battery-fan-network-e2e.md): the new items
   checked in the GNOME panel; [spike S3](docs/spikes/2026-11-21-s3-panel-legibility.md) on why the
   pixmap labels are hard to read at 125 % scale.
+- [Plan 03b — text labels](docs/plans/2026-11-21-rust-statsbar-03b-text-labels.md): a themed
+  icon with the value as panel text, through a vendored `ksni` with `XAyatanaLabel`;
+  [end-to-end run](docs/spikes/2026-11-21-03b-text-labels-e2e.md).
 
 ## License
 
