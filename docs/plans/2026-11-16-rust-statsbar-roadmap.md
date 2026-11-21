@@ -14,7 +14,7 @@ draws the tray items and serves snapshots. `statsbar-panel` is a GTK4/libadwaita
 spawns on demand and that exits when closed. `statsbar-fan-helper` is a root helper used only for fan
 control. Pure arithmetic lives in `crates/core`, which is the only crate tests can pin without hardware.
 
-**Tech stack:** Rust 1.99 (edition 2024) · `ksni` 0.3.7 (StatusNotifierItem tray, `async-io` feature) ·
+**Tech stack:** Rust 1.99 (edition 2024) · `ksni` 0.3.7 *(vendored at `vendor/ksni` with `XAyatanaLabel`, see its `PATCHES.md`)* (StatusNotifierItem tray, `async-io` feature) ·
 `zbus` 5.19.0 (NetworkManager, BlueZ, UPower, notifications; the major version `ksni` 0.3.7
 uses, so only one copy is linked) · `gtk4` 0.11.5 + `libadwaita` 0.9.2 (panel only) · `rustix` 1.1.6 ·
 `serde` 1.0.229 + `serde_json` 1.0.154 (IPC) · `toml` 1.2.1 (config) ·
@@ -106,16 +106,13 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 - Notifications: `org.freedesktop.Notifications` through the `zbus` connection the daemon already has —
   no extra crate.
 - Release profile: `opt-level = "s"`, fat LTO, one codegen unit, `panic = "abort"`, stripped.
-- Tray label: use the Stats Mini arrangement as the reference for Plan 02b. Put a small module label
-  above a larger, right-aligned percentage in a fixed 20×20 pixmap. The
-  [GNOME probe](../spikes/2026-11-18-02b-system-font.md) showed 11 px of visible percentage height
-  at 125% scale. Verify the full percentage range and the RAM label on the live panel.
+- Tray label: a themed Yaru icon with the value as `XAyatanaLabel` text (Plan 03b).
 
 ## Risks & Rollback
 
 | Risk | Mitigation | Revert |
 |---|---|---|
-| GNOME AppIndicator can render wide tray labels too small to read | [The 02b probe](../spikes/2026-11-18-02b-system-font.md) measured 5 px for the wide system-font label and 11 px for the square Stats Mini percentage. At 125 % scale the user found every 20×20 pixmap label hard to read ([spike S3](../spikes/2026-11-21-s3-panel-legibility.md)); the chosen fix, a themed icon with the number as `XAyatanaLabel` text, needs its own plan, since `ksni` 0.3.7 cannot publish that property | A level icon with the figure in the menu remains a fallback |
+| GNOME AppIndicator can render wide tray labels too small to read | [The 02b probe](../spikes/2026-11-18-02b-system-font.md) measured 5 px for the wide system-font label and 11 px for the square Stats Mini percentage. At 125 % scale the user found every 20×20 pixmap label hard to read ([spike S3](../spikes/2026-11-21-s3-panel-legibility.md)); Plan 03b shows the value as panel text ([end-to-end run](../spikes/2026-11-21-03b-text-labels-e2e.md)); with all five items shown the panel ran out of width at 125 % and GNOME ellipsized the labels, so hide items through the hub ([same run](../spikes/2026-11-21-03b-text-labels-e2e.md)) | A level icon with the figure in the menu remains a fallback |
 | Tray and D-Bus threads count towards the daemon's budget | [Spike S2](../spikes/2026-11-17-s2-threads.md) measured the main loop driving `zbus`, one shared `ksni` driver, the `async-io` reactor, and one `blocking-1` thread still present after 30 s. Additional items cost about 68 kB Pss each | Settled by spike S2: the invariant lists the threads S2 measured. |
 | On GNOME a tray click opens a menu, never a popover, and Wayland does not let the panel place itself under the icon | Designed around: the menu carries the at-a-glance rows, "Open details…" opens the panel where the compositor puts it | — |
 | Ubuntu removes or changes the AppIndicator extension | The panel is also launchable from a `.desktop` entry, so the app degrades to a window | — |
@@ -142,7 +139,7 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 | Process lists, GPU scan, ping, phones only on demand | The expensive readers never run in the background |
 | D-Bus signals for NetworkManager, BlueZ, UPower | No polling at all for state that changes rarely |
 | Files kept open and re-read with `pread` | No open/close pair per sample |
-| Tray pixmap redrawn only when its text changes | An idle machine redraws almost nothing |
+| Tray label resent only when its text changes | An idle machine redraws almost nothing |
 
 **Budget, to be measured in Plan 11:** daemon ≤ 15 MB PSS and ≤ 0.5 % of one core averaged over five
 idle minutes with all six items visible; no panel process while the panel is closed.
@@ -277,6 +274,25 @@ task. "Evidence" is what its end-to-end check must show.
   pixmap label hard to read at 125 % scale; [spike S3](../spikes/2026-11-21-s3-panel-legibility.md)
   traced it to the shell, and the user chose a themed icon with the number as `XAyatanaLabel` text,
   which `ksni` 0.3.7 cannot publish.
+
+### Plan 03b — Tray text labels *(written: `docs/plans/2026-11-21-rust-statsbar-03b-text-labels.md`)*
+- **Scope:** every metric item shows a themed Yaru icon with its value as `XAyatanaLabel` text,
+  drawn by GNOME in its own panel font; the 20×20 pixmap labels of Plans 02b and 03 are removed.
+  `ksni` 0.3.7 is vendored at `vendor/ksni` and patched (see its `PATCHES.md`) to publish
+  `XAyatanaLabel`, `XAyatanaLabelGuide` and the `XAyatanaNewLabel` signal. Percentage items show
+  `37%` with the guide `100%`; Network shows only the download rate, such as `↓1.5M`, with the
+  guide `↓999M`. Battery floors its icon to tens and adds `-charging` only while charging; Fan
+  uses `weather-windy-symbolic`.
+- **Core changes:** `label::render`, `label::render_rates`, `label::Metric` and `label::SIZE` are
+  removed; `label::rate_text` stays.
+- **Tests:** the icon and label mapping, including the battery floor and the charging variant; a
+  D-Bus test on a private `dbus-daemon` that reads `XAyatanaLabel` and `XAyatanaLabelGuide`.
+- **Evidence:** [the end-to-end run](../spikes/2026-11-21-03b-text-labels-e2e.md). Properties
+  matched `BAT0`, `free -m` and the title rates; `XAyatanaNewLabel` fired 7 times in 10 s. With CPU
+  and Memory shown the labels read crisply (`34%`, `43%`), but with all five items shown GNOME
+  ellipsized every label at 125 % scale. The user accepted that as a gap ("Ghi gap, làm tiếp").
+  The extension ignores `XAyatanaLabelGuide`. 4 threads at Pss 2789 kB. The charging icon was seen
+  only in tests, and the run used the user's real `~/.config`.
 
 ### Plan 04 — IPC and panel skeleton (CPU and Memory pages)
 - **Needs first:** `sudo apt install libgtk-4-dev libadwaita-1-dev` — a dependency addition, so ask;
