@@ -8,6 +8,7 @@ use std::io;
 use std::path::Path;
 
 use serde::Deserialize;
+use statsbar_core::schedule::ReaderId;
 
 use crate::fsutil::{read_to_string_capped, write_atomically};
 
@@ -23,6 +24,9 @@ pub struct Config {
 pub struct Items {
     pub cpu: bool,
     pub memory: bool,
+    pub battery: bool,
+    pub fan: bool,
+    pub network: bool,
 }
 
 impl Default for Items {
@@ -30,7 +34,33 @@ impl Default for Items {
         Items {
             cpu: true,
             memory: true,
+            battery: true,
+            fan: true,
+            network: true,
         }
+    }
+}
+
+impl Items {
+    pub fn shown(&self, id: ReaderId) -> bool {
+        match id {
+            ReaderId::Cpu => self.cpu,
+            ReaderId::Memory => self.memory,
+            ReaderId::Battery => self.battery,
+            ReaderId::Fan => self.fan,
+            ReaderId::Network => self.network,
+        }
+    }
+
+    pub fn set_shown(&mut self, id: ReaderId, shown: bool) {
+        let flag = match id {
+            ReaderId::Cpu => &mut self.cpu,
+            ReaderId::Memory => &mut self.memory,
+            ReaderId::Battery => &mut self.battery,
+            ReaderId::Fan => &mut self.fan,
+            ReaderId::Network => &mut self.network,
+        };
+        *flag = shown;
     }
 }
 
@@ -70,11 +100,16 @@ pub fn update_text(existing: &str, config: &Config) -> Result<String, ConfigErro
     let toml::Value::Table(items) = items else {
         return Err(ConfigError::NotATable("items"));
     };
-    items.insert("cpu".to_owned(), toml::Value::Boolean(config.items.cpu));
-    items.insert(
-        "memory".to_owned(),
-        toml::Value::Boolean(config.items.memory),
-    );
+    let shown = &config.items;
+    for (key, value) in [
+        ("cpu", shown.cpu),
+        ("memory", shown.memory),
+        ("battery", shown.battery),
+        ("fan", shown.fan),
+        ("network", shown.network),
+    ] {
+        items.insert(key.to_owned(), toml::Value::Boolean(value));
+    }
     toml::to_string(&table).map_err(|error| ConfigError::Render(Box::new(error)))
 }
 

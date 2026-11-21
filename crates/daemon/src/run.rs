@@ -10,15 +10,18 @@ use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use futures_lite::{StreamExt, future};
-use ksni::{Handle, TrayMethods};
-use statsbar_core::cpu::CoreTicks;
+use ksni::{Handle, Icon, TrayMethods};
 use statsbar_core::label::Metric;
-use statsbar_core::memory::MemInfo;
 use statsbar_core::schedule::ReaderId;
+use statsbar_core::throughput::Reading;
+use statsbar_readers::battery::BatteryReader;
 use statsbar_readers::cpu::CpuReader;
+use statsbar_readers::fan::FanReader;
 use statsbar_readers::memory::MemoryReader;
+use statsbar_readers::network::NetworkReader;
 
-use crate::app::{App, Command};
+use crate::app::{App, Command, READERS, slot};
+use crate::config::Items;
 use crate::power::{ProfileWatch, is_power_saver};
 use crate::tray::{self, Hub, MetricItem};
 use crate::{autostart, config, paths, summary};
@@ -48,6 +51,37 @@ async fn bounded<T>(
 
 fn elapsed_nanos(start: Instant) -> u64 {
     u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
+/// A label to draw: the pixmap and the item's title.
+type Look = (Option<Icon>, String);
+
+fn percent_look(id: ReaderId, metric: Metric, value: u8) -> Look {
+    (
+        tray::icon(metric, value),
+        summary::title(tray::name(id), Some(value)),
+    )
+}
+
+fn rates_look(reading: &Reading) -> Look {
+    (
+        Some(tray::rates_icon(reading.upload_rate, reading.download_rate)),
+        summary::network_title(reading),
+    )
+}
+
+/// Reuses the open reader, or opens one, then reads it. A failed read leaves the reader in its
+/// slot; the caller's `read_failed` closes it, so the next attempt reopens its files.
+fn read_with<R, T>(
+    slot: &mut Option<R>,
+    open: impl FnOnce() -> io::Result<R>,
+    read: impl FnOnce(&mut R) -> io::Result<T>,
+) -> io::Result<T> {
+    let reader = match slot.take() {
+        Some(reader) => reader,
+        None => open()?,
+    };
+    read(slot.insert(reader))
 }
 
 pub async fn run() -> Result<(), BoxError> {
@@ -123,6 +157,28 @@ struct Files {
     autostart: PathBuf,
 }
 
+/// The open readers. A hidden metric's reader is dropped, which closes its files.
+#[derive(Default)]
+struct Readers {
+    cpu: Option<CpuReader>,
+    memory: Option<MemoryReader>,
+    battery: Option<BatteryReader>,
+    fan: Option<FanReader>,
+    network: Option<NetworkReader>,
+}
+
+impl Readers {
+    fn close(&mut self, id: ReaderId) {
+        match id {
+            ReaderId::Cpu => self.cpu = None,
+            ReaderId::Memory => self.memory = None,
+            ReaderId::Battery => self.battery = None,
+            ReaderId::Fan => self.fan = None,
+            ReaderId::Network => self.network = None,
+        }
+    }
+}
+
 enum Wake {
     Timer,
     Command(Command),
@@ -135,33 +191,25 @@ struct Daemon {
     app: App,
     files: Files,
     hub: Handle<Hub>,
-    hub_shown: Option<(Vec<String>, bool, bool, bool)>,
-    cpu_item: Option<Handle<MetricItem>>,
-    memory_item: Option<Handle<MetricItem>>,
-    cpu_reader: Option<CpuReader>,
-    memory_reader: Option<MemoryReader>,
+    hub_shown: Option<(Vec<String>, Items, bool)>,
+    /// Indexed by `app::slot`.
+    items: [Option<Handle<MetricItem>>; 5],
+    readers: Readers,
 }
 
 impl Daemon {
     async fn start(app: App, commands: Sender<Command>, files: Files) -> Result<Daemon, BoxError> {
-        let hub = Hub::new(
-            commands,
-            app.config.items.cpu,
-            app.config.items.memory,
-            app.launch_at_login,
-        );
+        let hub = Hub::new(commands, app.config.items.clone(), app.launch_at_login);
         let hub = bounded("hub item spawn", SETUP_TIMEOUT, hub.spawn()).await??;
         let mut daemon = Daemon {
             app,
             files,
             hub,
             hub_shown: None,
-            cpu_item: None,
-            memory_item: None,
-            cpu_reader: None,
-            memory_reader: None,
+            items: Default::default(),
+            readers: Readers::default(),
         };
-        for id in [ReaderId::Cpu, ReaderId::Memory] {
+        for id in READERS {
             if daemon.app.is_visible(id) {
                 daemon.show_item(id).await;
             }
@@ -259,70 +307,72 @@ impl Daemon {
         Ok(())
     }
 
+    /// Reads one metric, records it, and redraws its item.
     async fn sample(&mut self, id: ReaderId, now: u64) {
-        match id {
-            ReaderId::Cpu => match self.read_cpu() {
-                Ok(ticks) => {
-                    let label = self.app.record_cpu(now, ticks);
-                    self.refresh_item(Metric::Cpu, label).await;
-                }
-                Err(error) => self.read_failed(id, now, &error),
-            },
-            ReaderId::Memory => match self.read_memory() {
-                Ok(info) => {
-                    let label = self.app.record_memory(now, &info);
-                    self.refresh_item(Metric::Ram, label).await;
-                }
-                Err(error) => self.read_failed(id, now, &error),
-            },
+        let root = &self.files.root;
+        let readers = &mut self.readers;
+        let app = &mut self.app;
+        let result = match id {
+            ReaderId::Cpu => read_with(&mut readers.cpu, || CpuReader::open(root), CpuReader::read)
+                .map(|ticks| {
+                    app.record_cpu(now, ticks)
+                        .map(|value| percent_look(id, Metric::Cpu, value))
+                }),
+            ReaderId::Memory => read_with(
+                &mut readers.memory,
+                || MemoryReader::open(root),
+                MemoryReader::read,
+            )
+            .map(|info| {
+                app.record_memory(now, &info)
+                    .map(|value| percent_look(id, Metric::Ram, value))
+            }),
+            ReaderId::Battery => read_with(
+                &mut readers.battery,
+                || BatteryReader::open(root),
+                BatteryReader::read,
+            )
+            .map(|reading| {
+                app.record_battery(now, &reading.info, reading.adapter_online)
+                    .map(|(metric, value)| percent_look(id, metric, value))
+            }),
+            ReaderId::Fan => read_with(&mut readers.fan, || FanReader::open(root), FanReader::read)
+                .map(|speed| {
+                    app.record_fan(now, speed)
+                        .map(|value| percent_look(id, Metric::Fan, value))
+                }),
+            ReaderId::Network => read_with(
+                &mut readers.network,
+                || NetworkReader::open(root),
+                NetworkReader::read,
+            )
+            .map(|sample| {
+                app.record_network(now, sample.as_ref())?;
+                app.network().map(|status| rates_look(&status.reading))
+            }),
+        };
+        match result {
+            Ok(redraw) => self.refresh_item(id, redraw).await,
+            Err(error) => self.read_failed(id, now, &error),
         }
     }
 
-    fn read_cpu(&mut self) -> io::Result<Vec<CoreTicks>> {
-        let reader = match self.cpu_reader.take() {
-            Some(reader) => reader,
-            None => CpuReader::open(&self.files.root)?,
-        };
-        self.cpu_reader.insert(reader).read()
-    }
-
-    fn read_memory(&mut self) -> io::Result<MemInfo> {
-        let reader = match self.memory_reader.take() {
-            Some(reader) => reader,
-            None => MemoryReader::open(&self.files.root)?,
-        };
-        self.memory_reader.insert(reader).read()
-    }
-
-    /// Drops the reader, so the next attempt reopens the file, and logs the first failure in a row.
+    /// Closes the reader, so the next attempt reopens its files, and logs the first failure in a
+    /// row.
     fn read_failed(&mut self, id: ReaderId, now: u64, error: &io::Error) {
-        match id {
-            ReaderId::Cpu => self.cpu_reader = None,
-            ReaderId::Memory => self.memory_reader = None,
-        }
+        self.readers.close(id);
         if self.app.record_error(id, now) {
             eprintln!("statsbard: reading {id:?} failed: {error}");
         }
     }
 
-    async fn refresh_item(&self, metric: Metric, label: Option<u8>) {
-        let (handle, rows) = match metric {
-            Metric::Cpu => (&self.cpu_item, self.app.cpu().map(summary::cpu_rows)),
-            Metric::Ram => (
-                &self.memory_item,
-                self.app.memory().map(summary::memory_rows),
-            ),
+    async fn refresh_item(&self, id: ReaderId, redraw: Option<Look>) {
+        let Some(handle) = &self.items[slot(id)] else {
+            return;
         };
-        let Some(handle) = handle else { return };
-        let rows = rows.unwrap_or_default();
-        let redraw = label.map(|value| {
-            (
-                tray::icon(metric, value),
-                summary::title(tray::name(metric), Some(value)),
-            )
-        });
+        let rows = self.app.rows(id);
         // A missed update is not retried. The rows are resent on the next sample, but the icon and
-        // title only when the percent changes again, because `App` has already recorded the new
+        // title only when the label changes again, because `App` has already recorded the new
         // value. A 1 s stall on `ksni`'s lock is itself worth investigating, and the log shows it.
         update(
             handle,
@@ -339,26 +389,18 @@ impl Daemon {
     }
 
     async fn refresh_hub(&mut self) {
-        let config = &self.app.config;
         let shown = (
-            summary::hub_rows(
-                self.app.cpu(),
-                self.app.memory(),
-                config.items.cpu,
-                config.items.memory,
-            ),
-            config.items.cpu,
-            config.items.memory,
+            summary::hub_rows(&self.app.overview()),
+            self.app.config.items.clone(),
             self.app.launch_at_login,
         );
         if self.hub_shown.as_ref() == Some(&shown) {
             return;
         }
-        let (rows, show_cpu, show_memory, launch_at_login) = shown.clone();
+        let (rows, items, launch_at_login) = shown.clone();
         let delivered = update(&self.hub, "hub update", move |hub: &mut Hub| {
             hub.rows = rows;
-            hub.show_cpu = show_cpu;
-            hub.show_memory = show_memory;
+            hub.items = items;
             hub.launch_at_login = launch_at_login;
         })
         .await;
@@ -370,8 +412,7 @@ impl Daemon {
 
     async fn handle(&mut self, command: Command) {
         match command {
-            Command::ToggleCpu => self.toggle(ReaderId::Cpu).await,
-            Command::ToggleMemory => self.toggle(ReaderId::Memory).await,
+            Command::Toggle(id) => self.toggle(id).await,
             Command::ToggleLaunchAtLogin => self.toggle_launch_at_login(),
             Command::Quit => {}
         }
@@ -391,39 +432,23 @@ impl Daemon {
     }
 
     async fn show_item(&mut self, id: ReaderId) {
-        let metric = match id {
-            ReaderId::Cpu => Metric::Cpu,
-            ReaderId::Memory => Metric::Ram,
-        };
         match bounded(
             "metric item spawn",
             SETUP_TIMEOUT,
-            MetricItem::new(metric).spawn(),
+            MetricItem::new(id).spawn(),
         )
         .await
         {
-            Ok(Ok(handle)) => match id {
-                ReaderId::Cpu => self.cpu_item = Some(handle),
-                ReaderId::Memory => self.memory_item = Some(handle),
-            },
+            Ok(Ok(handle)) => self.items[slot(id)] = Some(handle),
             Ok(Err(error)) => eprintln!("statsbard: showing {id:?} failed: {error}"),
             Err(error) => eprintln!("statsbard: {error}"),
         }
     }
 
-    /// Removes the item and closes its file, so a hidden metric costs nothing.
+    /// Removes the item and closes its files, so a hidden metric costs nothing.
     async fn hide_item(&mut self, id: ReaderId) {
-        let handle = match id {
-            ReaderId::Cpu => {
-                self.cpu_reader = None;
-                self.cpu_item.take()
-            }
-            ReaderId::Memory => {
-                self.memory_reader = None;
-                self.memory_item.take()
-            }
-        };
-        if let Some(handle) = handle {
+        self.readers.close(id);
+        if let Some(handle) = self.items[slot(id)].take() {
             shut_down(&handle, "metric item shutdown").await;
         }
     }
@@ -437,11 +462,10 @@ impl Daemon {
     }
 
     async fn shutdown(&mut self) {
-        for handle in [self.cpu_item.take(), self.memory_item.take()]
-            .into_iter()
-            .flatten()
-        {
-            shut_down(&handle, "metric item shutdown").await;
+        for item in &mut self.items {
+            if let Some(handle) = item.take() {
+                shut_down(&handle, "metric item shutdown").await;
+            }
         }
         shut_down(&self.hub, "hub shutdown").await;
     }

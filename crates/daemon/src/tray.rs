@@ -7,9 +7,11 @@ use async_channel::Sender;
 use ksni::menu::{CheckmarkItem, StandardItem};
 use ksni::{Category, Icon, MenuItem};
 use statsbar_core::label::{self, Metric};
+use statsbar_core::schedule::ReaderId;
 
-use crate::app::Command;
-use crate::summary;
+use crate::app::{Command, READERS};
+use crate::config::Items;
+use crate::summary::{self, Overview};
 
 /// Shown before a metric's first value, and as the hub's icon.
 pub const FALLBACK_ICON: &str = "utilities-system-monitor";
@@ -25,6 +27,17 @@ pub fn icon(metric: Metric, percent: u8) -> Option<Icon> {
     })
 }
 
+/// The network label: upload over download.
+pub fn rates_icon(upload: f64, download: f64) -> Icon {
+    // SIZE is 20, so the cast cannot truncate.
+    let side = label::SIZE as i32;
+    Icon {
+        width: side,
+        height: side,
+        data: label::render_rates(upload, download).to_vec(),
+    }
+}
+
 fn row<T>(text: &str) -> MenuItem<T> {
     StandardItem {
         label: text.to_owned(),
@@ -35,36 +48,42 @@ fn row<T>(text: &str) -> MenuItem<T> {
 }
 
 pub struct MetricItem {
-    pub metric: Metric,
+    pub reader: ReaderId,
     pub icon: Option<Icon>,
     pub title: String,
     pub rows: Vec<String>,
 }
 
 impl MetricItem {
-    pub fn new(metric: Metric) -> MetricItem {
+    pub fn new(reader: ReaderId) -> MetricItem {
         MetricItem {
-            metric,
+            reader,
             icon: None,
-            title: name(metric).to_owned(),
+            title: name(reader).to_owned(),
             rows: Vec::new(),
         }
     }
 }
 
-/// The name in titles and the hub's rows.
-pub fn name(metric: Metric) -> &'static str {
-    match metric {
-        Metric::Cpu => "CPU",
-        Metric::Ram => "Memory",
+/// The name in titles, the hub's rows and its switches.
+pub fn name(reader: ReaderId) -> &'static str {
+    match reader {
+        ReaderId::Cpu => "CPU",
+        ReaderId::Memory => "Memory",
+        ReaderId::Battery => "Battery",
+        ReaderId::Fan => "Fan",
+        ReaderId::Network => "Network",
     }
 }
 
 impl ksni::Tray for MetricItem {
     fn id(&self) -> String {
-        match self.metric {
-            Metric::Cpu => "statsbar-cpu",
-            Metric::Ram => "statsbar-memory",
+        match self.reader {
+            ReaderId::Cpu => "statsbar-cpu",
+            ReaderId::Memory => "statsbar-memory",
+            ReaderId::Battery => "statsbar-battery",
+            ReaderId::Fan => "statsbar-fan",
+            ReaderId::Network => "statsbar-network",
         }
         .to_owned()
     }
@@ -97,26 +116,19 @@ impl ksni::Tray for MetricItem {
 
 pub struct Hub {
     pub rows: Vec<String>,
-    pub show_cpu: bool,
-    pub show_memory: bool,
+    pub items: Items,
     pub launch_at_login: bool,
     commands: Sender<Command>,
 }
 
 impl Hub {
-    pub fn new(
-        commands: Sender<Command>,
-        show_cpu: bool,
-        show_memory: bool,
-        launch_at_login: bool,
-    ) -> Hub {
+    pub fn new(commands: Sender<Command>, items: Items, launch_at_login: bool) -> Hub {
         Hub {
             // Placeholders now, so the first values only relabel rows. Adding rows later would
             // change the layout, which makes ksni renumber every menu id and lose a click sent
             // with an old one.
-            rows: summary::hub_rows(None, None, show_cpu, show_memory),
-            show_cpu,
-            show_memory,
+            rows: summary::hub_rows(&Overview::waiting(&items)),
+            items,
             launch_at_login,
             commands,
         }
@@ -164,12 +176,13 @@ impl ksni::Tray for Hub {
         if !menu.is_empty() {
             menu.push(MenuItem::Separator);
         }
-        menu.push(switch("Show CPU", self.show_cpu, Command::ToggleCpu));
-        menu.push(switch(
-            "Show Memory",
-            self.show_memory,
-            Command::ToggleMemory,
-        ));
+        for id in READERS {
+            menu.push(switch(
+                &format!("Show {}", name(id)),
+                self.items.shown(id),
+                Command::Toggle(id),
+            ));
+        }
         menu.push(MenuItem::Separator);
         menu.push(switch(
             "Launch at login",
