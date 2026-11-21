@@ -115,7 +115,7 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 
 | Risk | Mitigation | Revert |
 |---|---|---|
-| GNOME AppIndicator can render wide tray labels too small to read | [The 02b probe](../spikes/2026-11-18-02b-system-font.md) measured 5 px for the wide system-font label and 11 px for the square Stats Mini percentage | A level icon with the figure in the menu remains a fallback |
+| GNOME AppIndicator can render wide tray labels too small to read | [The 02b probe](../spikes/2026-11-18-02b-system-font.md) measured 5 px for the wide system-font label and 11 px for the square Stats Mini percentage. At 125 % scale the user found every 20×20 pixmap label hard to read ([spike S3](../spikes/2026-11-21-s3-panel-legibility.md)); the chosen fix, a themed icon with the number as `XAyatanaLabel` text, needs its own plan, since `ksni` 0.3.7 cannot publish that property | A level icon with the figure in the menu remains a fallback |
 | Tray and D-Bus threads count towards the daemon's budget | [Spike S2](../spikes/2026-11-17-s2-threads.md) measured the main loop driving `zbus`, one shared `ksni` driver, the `async-io` reactor, and one `blocking-1` thread still present after 30 s. Additional items cost about 68 kB Pss each | Settled by spike S2: the invariant lists the threads S2 measured. |
 | On GNOME a tray click opens a menu, never a popover, and Wayland does not let the panel place itself under the icon | Designed around: the menu carries the at-a-glance rows, "Open details…" opens the panel where the compositor puts it | — |
 | Ubuntu removes or changes the AppIndicator extension | The panel is also launchable from a `.desktop` entry, so the app degrades to a window | — |
@@ -256,14 +256,27 @@ task. "Evidence" is what its end-to-end check must show.
   Written: [the daemon plan](2026-11-18-rust-statsbar-02b-daemon.md). The worker thread moves
   to Plan 05; config parsing lives in the daemon crate, since `toml` cannot enter `core`.
 
-### Plan 03 — Battery, fans (read-only), network label
-- **Scope:** `BAT0`, `AC`, `dell_smm` readers; default-route interface and its counters; three more
-  tray items.
-- **Core additions:** `battery::BatteryFigures` (health, watts, time remaining from charge and current);
-  `fan::range_fraction`.
+### Plan 03 — Battery, fans (read-only), network label *(written: `docs/plans/2026-11-19-rust-statsbar-03-battery-fan-network.md`)*
+- **Scope:** `BAT0`, `AC`, `dell_smm` readers; the default-route interface and its counters; three
+  more tray items with summary menus. Battery shows `BAT` over the charge percent, or `CHG` only
+  while the kernel status is `Charging`. Fan shows `FAN` over its share of `fan1_min`–`fan1_max`,
+  clamped at 100 %. Network draws upload over download in the 20×20 pixmap, each at most three
+  characters of number and one unit letter.
+- **Core additions:** `battery::BatteryFigures::new(&BatteryInfo, Option<bool>)` (health, watts,
+  time remaining from charge and current, dropped above 24 h); `fan::range_fraction(&FanSpeed)`;
+  `network::default_route_interface(&str)`; `label::rate_text(f64)` and `label::render_rates`.
 - **Tests:** discharging, charging, full, zero current (no time estimate), a missing `cycle_count`;
   no default route.
-- **Evidence:** label rate matches `ip -s link` over the same 10 s within 5 %.
+- **Evidence:** [the end-to-end run](../spikes/2026-11-19-03-battery-fan-network-e2e.md). Polled
+  at the daemon's ticks, the title rates averaged within +2.0 % of `rx_bytes` over 10 ticks of a
+  mirror download; a first attempt over an unaligned 10 s window was off by 6.2 %, from tick
+  misalignment while the rate swung. After unplugging, `Time left` appeared 1 s after
+  `Discharging`. Hiding each item closed its files, with no read until it was shown again. Power Saver stretched battery reads to 5 s. 4 threads at
+  Pss 2997 kB. `CHG` was seen only in tests, since the charge sat above the 75 % start threshold.
+  `BAT0/uevent` reads averaged 13–15 ms with a 119 ms peak, on the main loop. The user found every
+  pixmap label hard to read at 125 % scale; [spike S3](../spikes/2026-11-21-s3-panel-legibility.md)
+  traced it to the shell, and the user chose a themed icon with the number as `XAyatanaLabel` text,
+  which `ksni` 0.3.7 cannot publish.
 
 ### Plan 04 — IPC and panel skeleton (CPU and Memory pages)
 - **Needs first:** `sudo apt install libgtk-4-dev libadwaita-1-dev` — a dependency addition, so ask;
@@ -280,6 +293,8 @@ task. "Evidence" is what its end-to-end check must show.
 ### Plan 05 — Battery and Network pages
 - **Scope:** battery detail page; NetworkManager reader; Wi-Fi details; DNS; ping; public IP; the
   worker thread (moved from 02b), with the public IP lookup as its first caller.
+- **Note:** the NetworkManager reader replaces `/proc/net/route` for the tray's interface, which
+  closes Plan 03's gap: an IPv6-only default route reads as `No active interface` until then.
 - **Tests:** NetworkManager property maps → `NetworkInfo` (wired, Wi-Fi, disconnected, no IPv6);
   frequency → band and channel; `ping::stats(&[f64]) -> (mean, jitter)`; public-IP replies that are
   empty, oversized or not an address.
