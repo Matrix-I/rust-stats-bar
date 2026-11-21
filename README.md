@@ -3,7 +3,7 @@
 A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardware figures in the
 panel, details one click away, built to cost as little CPU and memory as possible.
 
-Status: CPU and Memory in the tray (statsbard); run with `cargo run --release -p statsbard`.
+Status: CPU, Memory, Battery, Fan and Network in the tray (statsbard); run with `cargo run --release -p statsbard`.
 
 ## Development
 
@@ -33,6 +33,11 @@ reader, which hands plain values to the core.
   `/proc` readers, the hub with show/hide switches, launch at login, and the CPU and Memory items.
 - [Plan 02b — end-to-end run](docs/spikes/2026-11-18-02b-daemon-e2e.md): the daemon checked in the
   GNOME panel.
+- [Plan 03 — battery, fan and network](docs/plans/2026-11-19-rust-statsbar-03-battery-fan-network.md):
+  the `BAT0`, `AC`, `dell_smm` and default-route readers, and their three tray items.
+- [Plan 03 — end-to-end run](docs/spikes/2026-11-19-03-battery-fan-network-e2e.md): the new items
+  checked in the GNOME panel; [spike S3](docs/spikes/2026-11-21-s3-panel-legibility.md) on why the
+  pixmap labels are hard to read at 125 % scale.
 
 ## License
 
