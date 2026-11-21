@@ -1,11 +1,12 @@
 use ksni::Tray;
 use ksni::menu::MenuItem;
-use statsbar_core::label::{self, Metric};
 use statsbar_core::schedule::ReaderId;
+use statsbar_core::throughput::Reading;
+use statsbard::app::BatteryLabel;
 use statsbard::app::Command;
 use statsbard::app::READERS;
 use statsbard::config::Items;
-use statsbard::tray::{self, FALLBACK_ICON, Hub, MetricItem};
+use statsbard::tray::{self, Hub, Look, MetricItem};
 
 fn hub(capacity: usize) -> (Hub, async_channel::Receiver<Command>) {
     let (sender, receiver) = async_channel::bounded(capacity);
@@ -115,25 +116,82 @@ fn a_full_command_queue_drops_the_click_instead_of_blocking_the_tray_thread() {
 }
 
 #[test]
-fn a_metric_item_shows_a_themed_icon_until_its_first_value() {
+fn a_metric_item_shows_its_icon_alone_until_its_first_value() {
     let mut item = MetricItem::new(ReaderId::Cpu);
-    assert_eq!(item.icon_name(), FALLBACK_ICON);
+    assert_eq!(item.icon_name(), "computer-chip-symbolic");
+    assert_eq!(item.x_ayatana_label(), "");
+    assert_eq!(item.x_ayatana_label_guide(), "100%");
     assert!(item.icon_pixmap().is_empty());
 
-    item.icon = tray::icon(Metric::Cpu, 42);
-    assert_eq!(item.icon_name(), "");
-    let pixmaps = item.icon_pixmap();
-    assert_eq!(pixmaps.len(), 1);
-    assert_eq!((pixmaps[0].width, pixmaps[0].height), (20, 20));
+    item.label = tray::percent_label(42);
+    assert_eq!(item.x_ayatana_label(), "42%");
+    assert!(item.icon_pixmap().is_empty(), "the shell draws the text");
+}
+
+#[test]
+fn every_metric_has_its_yaru_icon() {
+    let icons: Vec<&str> = READERS.map(tray::metric_icon).to_vec();
     assert_eq!(
-        pixmaps[0].data,
-        label::render(Metric::Cpu, 42).expect("in range").to_vec()
+        icons,
+        [
+            "computer-chip-symbolic",
+            "drive-harddisk-solidstate-symbolic",
+            "battery-missing-symbolic",
+            "weather-windy-symbolic",
+            "network-transmit-receive-symbolic",
+        ]
+    );
+    let icons: Vec<String> = READERS.map(|id| MetricItem::new(id).icon_name()).to_vec();
+    assert_eq!(
+        icons,
+        READERS.map(|id| tray::metric_icon(id).to_owned()).to_vec()
     );
 }
 
 #[test]
-fn an_icon_above_100_is_refused() {
-    assert!(tray::icon(Metric::Ram, 101).is_none());
+fn the_battery_icon_floors_to_tens_and_has_the_bolt_only_while_charging() {
+    for (percent, charging, icon) in [
+        (76, false, "battery-level-70-symbolic"),
+        (76, true, "battery-level-70-charging-symbolic"),
+        (9, false, "battery-level-0-symbolic"),
+        (0, true, "battery-level-0-charging-symbolic"),
+        (99, false, "battery-level-90-symbolic"),
+        (100, false, "battery-level-100-symbolic"),
+        (100, true, "battery-level-100-charging-symbolic"),
+        (255, false, "battery-level-100-symbolic"),
+    ] {
+        assert_eq!(
+            tray::battery_icon(BatteryLabel { percent, charging }),
+            icon,
+            "{percent} {charging}"
+        );
+    }
+}
+
+#[test]
+fn labels_are_a_bare_percent_or_the_download_rate() {
+    assert_eq!(tray::percent_label(0), "0%");
+    assert_eq!(tray::percent_label(37), "37%");
+    assert_eq!(tray::percent_label(100), "100%");
+    assert_eq!(tray::download_label("1.5M"), "↓1.5M");
+    assert_eq!(tray::download_label("0B"), "↓0B");
+}
+
+#[test]
+fn each_guide_is_its_widest_label() {
+    for id in READERS {
+        let expected = if id == ReaderId::Network {
+            "↓999M"
+        } else {
+            "100%"
+        };
+        assert_eq!(tray::label_guide(id), expected, "{id:?}");
+        assert_eq!(
+            MetricItem::new(id).x_ayatana_label_guide(),
+            expected,
+            "{id:?}"
+        );
+    }
 }
 
 #[test]
@@ -161,8 +219,54 @@ fn metric_item_ids_are_stable_and_rows_are_not_clickable() {
 }
 
 #[test]
-fn the_rates_icon_is_the_two_line_label() {
-    let icon = tray::rates_icon(12_000.0, 0.0);
-    assert_eq!((icon.width, icon.height), (20, 20));
-    assert_eq!(icon.data, label::render_rates(12_000.0, 0.0).to_vec());
+fn a_percent_item_shows_its_icon_percent_label_and_titled_name() {
+    assert_eq!(
+        tray::percent_look(ReaderId::Cpu, 37),
+        Look {
+            icon: "computer-chip-symbolic".to_owned(),
+            label: "37%".to_owned(),
+            title: "CPU 37 %".to_owned(),
+        }
+    );
+    assert_eq!(
+        tray::percent_look(ReaderId::Fan, 100),
+        Look {
+            icon: "weather-windy-symbolic".to_owned(),
+            label: "100%".to_owned(),
+            title: "Fan 100 %".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn the_battery_item_shows_a_charging_level_icon_and_the_charge() {
+    assert_eq!(
+        tray::battery_look(BatteryLabel {
+            percent: 76,
+            charging: true
+        }),
+        Look {
+            icon: "battery-level-70-charging-symbolic".to_owned(),
+            label: "76%".to_owned(),
+            title: "Battery 76 %".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn the_network_item_labels_the_download_and_titles_both_rates() {
+    let reading = Reading {
+        download_total: 0,
+        upload_total: 0,
+        download_rate: 12_000.0,
+        upload_rate: 2_000.0,
+    };
+    assert_eq!(
+        tray::network_look("12K", &reading),
+        Look {
+            icon: "network-transmit-receive-symbolic".to_owned(),
+            label: "↓12K".to_owned(),
+            title: "Network ↓ 12.0 KB/s ↑ 2.0 KB/s".to_owned(),
+        }
+    );
 }
