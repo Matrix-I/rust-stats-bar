@@ -1,5 +1,7 @@
 //! CPU load: `/proc/stat` text in, percentages out.
 
+use serde::{Deserialize, Serialize};
+
 /// Cumulative jiffies of one logical CPU, folded into the buckets the UI shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CoreTicks {
@@ -57,7 +59,7 @@ pub fn parse_proc_stat(text: &str) -> Option<Vec<CoreTicks>> {
 }
 
 /// CPU usage over the interval between two `/proc/stat` samples.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CpuLoad {
     pub system_percent: f64,
     pub user_percent: f64,
