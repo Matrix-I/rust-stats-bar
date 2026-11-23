@@ -4,6 +4,7 @@
 use statsbar_core::battery::{BatteryFigures, BatteryInfo, ChargeStatus};
 use statsbar_core::cpu::{CoreTicks, CpuLoad};
 use statsbar_core::fan::{self, FanSpeed};
+use statsbar_core::ipc::Page;
 use statsbar_core::label;
 use statsbar_core::memory::{MemInfo, MemoryBuckets};
 use statsbar_core::schedule::{self, ReaderId, ReaderState};
@@ -20,6 +21,18 @@ pub const READERS: [ReaderId; 5] = [
     ReaderId::Fan,
     ReaderId::Network,
 ];
+
+/// A refresh sooner than this after the last read is ignored: the next read is under a second
+/// away anyway, and a load over a few milliseconds of ticks is noise.
+const MIN_REFRESH_NANOS: u64 = 500_000_000;
+
+/// The reader behind a page.
+pub fn reader_of(page: Page) -> ReaderId {
+    match page {
+        Page::Cpu => ReaderId::Cpu,
+        Page::Memory => ReaderId::Memory,
+    }
+}
 
 /// A click in the hub's menu, sent from the `ksni` thread to the main loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,6 +137,45 @@ impl App {
         self.readers[slot(id)].visible
     }
 
+    /// Whether anything shows the metric: its item or its page.
+    pub fn is_read(&self, id: ReaderId) -> bool {
+        let state = &self.readers[slot(id)];
+        state.visible || state.page_open
+    }
+
+    /// Records whether someone watches the page. A hidden item's page starts from a fresh sample
+    /// when it opens and drops it when it closes; a shown item's only changes the interval.
+    /// The time of the last read stays, so opening and closing a page over and over reads no
+    /// more often than the page's interval.
+    pub fn set_page_open(&mut self, id: ReaderId, open: bool) {
+        let index = slot(id);
+        if self.readers[index].page_open == open {
+            return;
+        }
+        if !self.readers[index].visible {
+            let last_read_nanos = self.readers[index].last_read_nanos;
+            self.forget(id);
+            self.readers[index] = fresh(id, false);
+            self.readers[index].last_read_nanos = last_read_nanos;
+            self.failing[index] = false;
+        }
+        self.readers[index].page_open = open;
+    }
+
+    /// The page's Refresh: due now, unless it was read a moment ago. Returns whether it was
+    /// taken.
+    pub fn refresh(&mut self, id: ReaderId, now_nanos: u64) -> bool {
+        let state = &mut self.readers[slot(id)];
+        let rested = state
+            .last_read_nanos
+            .is_some_and(|last| now_nanos.saturating_sub(last) >= MIN_REFRESH_NANOS);
+        let taken = state.page_open && rested;
+        if taken {
+            state.last_read_nanos = None;
+        }
+        taken
+    }
+
     pub fn due(&self, now_nanos: u64) -> Vec<ReaderId> {
         schedule::due(now_nanos, self.power_saver, &self.readers)
     }
@@ -134,10 +186,16 @@ impl App {
 
     /// Flips an item's visibility in the config and the schedule, and returns the new value.
     /// Hiding drops the item's samples, so an item shown again starts from a fresh reading and is
-    /// due at once, instead of showing a stale value.
+    /// due at once, instead of showing a stale value. While its page is open the samples stay
+    /// current and are kept; only the drawn label is forgotten, because a shown item starts blank.
     pub fn toggle(&mut self, id: ReaderId) -> bool {
         let visible = !self.is_visible(id);
         self.config.items.set_shown(id, visible);
+        if self.readers[slot(id)].page_open {
+            self.forget_label(id);
+            self.readers[slot(id)].visible = visible;
+            return visible;
+        }
         self.forget(id);
         self.readers[slot(id)] = fresh(id, visible);
         self.failing[slot(id)] = false;
@@ -145,30 +203,30 @@ impl App {
     }
 
     fn forget(&mut self, id: ReaderId) {
+        self.forget_label(id);
         match id {
             ReaderId::Cpu => {
                 self.cpu_previous = None;
                 self.cpu = None;
-                self.cpu_label = None;
             }
-            ReaderId::Memory => {
-                self.memory = None;
-                self.memory_label = None;
-            }
-            ReaderId::Battery => {
-                self.battery = None;
-                self.battery_label = None;
-            }
-            ReaderId::Fan => {
-                self.fan = None;
-                self.fan_label = None;
-            }
+            ReaderId::Memory => self.memory = None,
+            ReaderId::Battery => self.battery = None,
+            ReaderId::Fan => self.fan = None,
             ReaderId::Network => {
                 // A new session: the totals count from when the item is shown again.
                 self.throughput = ThroughputTracker::default();
                 self.network = None;
-                self.network_label = None;
             }
+        }
+    }
+
+    fn forget_label(&mut self, id: ReaderId) {
+        match id {
+            ReaderId::Cpu => self.cpu_label = None,
+            ReaderId::Memory => self.memory_label = None,
+            ReaderId::Battery => self.battery_label = None,
+            ReaderId::Fan => self.fan_label = None,
+            ReaderId::Network => self.network_label = None,
         }
     }
 
