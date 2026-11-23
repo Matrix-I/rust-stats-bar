@@ -107,12 +107,61 @@ impl MemoryBuckets {
         self.fraction(self.used()) * 100.0
     }
 
+    /// How far the pressure ring fills: memory that cannot be reclaimed without work (kernel and
+    /// zswap pool), 0–1. Its colour and caption come from [`Pressure`].
+    pub fn pressure_fraction(&self) -> f64 {
+        self.fraction(self.kernel.saturating_add(self.compressed))
+    }
+
     /// `part` as a share of total memory, 0–1. Zero when the total is unknown.
     pub fn fraction(&self, part: u64) -> f64 {
         if self.total == 0 {
             0.0
         } else {
             (part as f64 / self.total as f64).clamp(0.0, 1.0)
+        }
+    }
+}
+
+/// The `avg10` percentage at which each line of the PSI file raises the level.
+const PRESSURE_THRESHOLD: f64 = 10.0;
+
+/// Memory pressure, from `/proc/pressure/memory`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pressure {
+    Normal,
+    Warning,
+    Critical,
+}
+
+impl Pressure {
+    /// Critical at `full avg10 >= 10`, else Warning at `some avg10 >= 10`. `None` when either
+    /// figure is missing or malformed: unknown pressure must not read as Normal.
+    pub fn from_psi(text: &str) -> Option<Pressure> {
+        let avg10 = |kind: &str| -> Option<f64> {
+            text.lines()
+                .find_map(|line| line.strip_prefix(kind)?.strip_prefix(" avg10="))?
+                .split_ascii_whitespace()
+                .next()?
+                .parse()
+                .ok()
+                .filter(|value: &f64| value.is_finite())
+        };
+        let (some, full) = (avg10("some")?, avg10("full")?);
+        Some(if full >= PRESSURE_THRESHOLD {
+            Pressure::Critical
+        } else if some >= PRESSURE_THRESHOLD {
+            Pressure::Warning
+        } else {
+            Pressure::Normal
+        })
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Pressure::Normal => "Normal",
+            Pressure::Warning => "Warning",
+            Pressure::Critical => "Critical",
         }
     }
 }

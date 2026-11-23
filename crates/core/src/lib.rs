@@ -13,6 +13,8 @@ pub mod history;
 pub mod label;
 pub mod memory;
 pub mod network;
+pub mod process;
 pub mod schedule;
 pub mod sysfs;
+pub mod system;
 pub mod throughput;
