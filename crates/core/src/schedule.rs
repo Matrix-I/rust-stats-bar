@@ -6,8 +6,8 @@ const NANOS_PER_SECOND: u64 = 1_000_000_000;
 pub const VISIBLE_INTERVAL_NANOS: u64 = 2 * NANOS_PER_SECOND;
 /// That metric's page is open in the panel.
 pub const PAGE_OPEN_INTERVAL_NANOS: u64 = NANOS_PER_SECOND;
-/// The `power-saver` profile is active. Upstream's CPU reader lets Low Power Mode win over an
-/// open page, and so does this.
+/// The `power-saver` profile is active and the page is closed. An open page keeps its 1 s, as in
+/// upstream's `CPUReader.applyCadence`: someone is looking at it.
 pub const POWER_SAVER_INTERVAL_NANOS: u64 = 5 * NANOS_PER_SECOND;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,10 +35,10 @@ pub fn interval_nanos(state: &ReaderState, power_saver: bool) -> Option<u64> {
     if !state.visible && !state.page_open {
         return None;
     }
-    Some(if power_saver {
-        POWER_SAVER_INTERVAL_NANOS
-    } else if state.page_open {
+    Some(if state.page_open {
         PAGE_OPEN_INTERVAL_NANOS
+    } else if power_saver {
+        POWER_SAVER_INTERVAL_NANOS
     } else {
         VISIBLE_INTERVAL_NANOS
     })

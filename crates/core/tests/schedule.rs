@@ -21,7 +21,8 @@ fn intervals_follow_the_roadmap_cadence_table() {
         (true, true, false, Some(SECOND)),
         (false, true, false, Some(SECOND)),
         (true, false, true, Some(5 * SECOND)),
-        (true, true, true, Some(5 * SECOND)),
+        (false, true, true, Some(SECOND)),
+        (true, true, true, Some(SECOND)),
     ];
     for (visible, page_open, power_saver, expected) in cases {
         let state = reader(ReaderId::Cpu, visible, page_open, None);
