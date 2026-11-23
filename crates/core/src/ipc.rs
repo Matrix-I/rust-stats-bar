@@ -49,7 +49,8 @@ pub enum Request {
 pub enum Event {
     Cpu(CpuPage),
     Memory(MemoryPage),
-    /// Always the last line before the daemon closes the connection.
+    /// The last line before the daemon closes a connection for a protocol reason. A connection
+    /// it drops for its uid, a stalled reader or a failed write gets none.
     Error {
         reason: ErrorReason,
         message: String,

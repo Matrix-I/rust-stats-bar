@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use statsbard::paths::{autostart_file, config_file, config_home};
+use statsbard::paths::{autostart_file, config_file, config_home, runtime_dir};
 
 fn env(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<OsString> {
     move |key| {
@@ -44,4 +44,13 @@ fn files_sit_under_the_config_home() {
         autostart_file(home),
         Path::new("/home/u/.config/autostart/statsbar.desktop")
     );
+}
+
+#[test]
+fn the_runtime_directory_must_be_an_absolute_path() {
+    let set = env(&[("XDG_RUNTIME_DIR", "/run/user/1000")]);
+    assert_eq!(runtime_dir(set), Some(PathBuf::from("/run/user/1000")));
+    assert_eq!(runtime_dir(env(&[("XDG_RUNTIME_DIR", "run")])), None);
+    assert_eq!(runtime_dir(env(&[("XDG_RUNTIME_DIR", "")])), None);
+    assert_eq!(runtime_dir(env(&[("HOME", "/home/u")])), None);
 }

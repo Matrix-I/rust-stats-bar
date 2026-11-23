@@ -13,12 +13,11 @@ async-channel = "=2.5.0"
 async-io = "=2.6.0"
 futures-lite = "=2.6.1"
 ksni = { version = "=0.3.7", default-features = false, features = ["async-io"] }
+rustix = { version = "=1.1.6", features = ["fs", "net", "param", "process"] }
 serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
 toml = "=1.2.1"
 zbus = { version = "=5.19.0", default-features = false, features = ["async-io"] }
-
-[dev-dependencies]
-serde_json = "=1.0.154"
 
 [lints]
 workspace = true

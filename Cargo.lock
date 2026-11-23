@@ -655,6 +655,7 @@ dependencies = [
  "async-io",
  "futures-lite",
  "ksni",
+ "rustix",
  "serde",
  "serde_json",
  "statsbar-core",

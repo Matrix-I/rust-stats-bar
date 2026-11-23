@@ -22,3 +22,11 @@ pub fn config_file(config_home: &Path) -> PathBuf {
 pub fn autostart_file(config_home: &Path) -> PathBuf {
     config_home.join("autostart/statsbar.desktop")
 }
+
+/// `$XDG_RUNTIME_DIR`, when it is absolute. It has no fallback: a shared directory such as `/tmp`
+/// would let another user take the socket's place.
+pub fn runtime_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    var("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+}
