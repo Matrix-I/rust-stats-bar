@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::os::unix::fs::FileExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// procfs reports a size of 0, so the length is only known by reading to the end. The cap stops a
 /// corrupt file from growing the buffer without bound. /proc/stat on this 8-thread laptop is
@@ -58,4 +58,27 @@ impl ProcFile {
 
 pub(crate) fn invalid_data(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.to_owned())
+}
+
+/// A [`ProcFile`] for a figure that may be absent: opened on first use, and again after a failure.
+pub(crate) struct Reopening {
+    path: PathBuf,
+    file: Option<ProcFile>,
+}
+
+impl Reopening {
+    pub(crate) fn new(path: PathBuf) -> Reopening {
+        Reopening { path, file: None }
+    }
+
+    pub(crate) fn read<T>(&mut self, parse: impl FnOnce(&str) -> Option<T>) -> io::Result<T> {
+        let mut file = match self.file.take() {
+            Some(file) => file,
+            None => ProcFile::open(&self.path)?,
+        };
+        let value = parse(file.read()?)
+            .ok_or_else(|| invalid_data(&format!("{} is malformed", self.path.display())))?;
+        self.file = Some(file);
+        Ok(value)
+    }
 }
