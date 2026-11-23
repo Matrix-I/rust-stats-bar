@@ -1,5 +1,7 @@
 //! System-wide figures of the CPU page: kernel text in, values out.
 
+use serde::{Deserialize, Serialize};
+
 /// Above any CPU id Linux supports (`NR_CPUS` tops out at 8192); bounds a malformed range.
 const MAX_CPU_ID: u32 = 8191;
 /// A sensor outside this range is broken. Upstream drops the same readings.
@@ -66,7 +68,8 @@ pub fn parse_millidegrees(text: &str) -> Option<f64> {
 
 /// How hot the CPU package is. Derived: this machine's `temp1_max` equals its `temp1_crit`
 /// (100 °C), so the levels are fixed temperatures.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Thermal {
     Nominal,
     Fair,

@@ -1,5 +1,7 @@
 //! Memory: `/proc/meminfo` text in, the buckets of the memory bar out.
 
+use serde::{Deserialize, Serialize};
+
 /// The `/proc/meminfo` fields the buckets are built from, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MemInfo {
@@ -56,7 +58,7 @@ pub fn parse_meminfo(text: &str) -> Option<MemInfo> {
 /// The segments of the memory bar. `app + kernel + cached + free == total` always holds, so
 /// the bar never over- or under-fills, and `app + kernel` is the "used" figure GNOME System
 /// Monitor and `free` show: `MemTotal − MemAvailable`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MemoryBuckets {
     pub total: u64,
     /// Used memory that is not kernel memory: processes, tmpfs and shared memory.
@@ -127,7 +129,8 @@ impl MemoryBuckets {
 const PRESSURE_THRESHOLD: f64 = 10.0;
 
 /// Memory pressure, from `/proc/pressure/memory`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Pressure {
     Normal,
     Warning,

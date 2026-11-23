@@ -10,6 +10,7 @@ pub mod cpu;
 pub mod fan;
 pub mod format;
 pub mod history;
+pub mod ipc;
 pub mod label;
 pub mod memory;
 pub mod network;
