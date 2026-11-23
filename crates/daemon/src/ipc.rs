@@ -7,7 +7,7 @@ use std::fmt;
 use std::fs::{self, File};
 use std::future::{Future, poll_fn};
 use std::io;
-use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -22,6 +22,11 @@ use statsbar_core::ipc::{ErrorReason, Event, Hello, PROTOCOL_VERSION, Page, Requ
 const SOCKET: &str = "statsbar.sock";
 const LOCK: &str = "statsbar.lock";
 const PRIVATE: u32 = 0o600;
+/// The XDG Base Directory spec lets the session clean up runtime files that have neither this
+/// bit nor a fresh access time. A removed lock would let a second daemon start.
+const STICKY: u32 = 0o1000;
+/// Group and other permission bits.
+const SHARED: u32 = 0o077;
 /// One panel is the norm; the rest is room for `socat` and a panel that is restarting.
 pub const MAX_CLIENTS: usize = 4;
 /// The longest request is under 50 bytes.
@@ -116,6 +121,7 @@ impl Server {
     /// Claims the runtime directory for this daemon, then listens there. The lock is what makes
     /// replacing a leftover socket safe: its owner is known to be gone.
     pub fn bind(runtime_dir: &Path, options: Options) -> Result<Server, BindError> {
+        check_private(runtime_dir)?;
         // `truncate(false)`: the file only carries the lock.
         let lock = File::options()
             .write(true)
@@ -127,6 +133,8 @@ impl Server {
             Err(rustix::io::Errno::WOULDBLOCK) => return Err(BindError::AlreadyRunning),
             Err(error) => return Err(BindError::Io(error.into())),
         }
+        // Only once the lock is ours, so a running daemon's file is left as it is.
+        lock.set_permissions(fs::Permissions::from_mode(PRIVATE | STICKY))?;
 
         let socket = runtime_dir.join(SOCKET);
         match fs::symlink_metadata(&socket) {
@@ -141,9 +149,21 @@ impl Server {
             Err(error) => return Err(error.into()),
         }
         let listener = UnixListener::bind(&socket)?;
-        fs::set_permissions(&socket, fs::Permissions::from_mode(PRIVATE))?;
+        let listener =
+            match fs::set_permissions(&socket, fs::Permissions::from_mode(PRIVATE | STICKY))
+                .and_then(|()| Async::new(listener))
+            {
+                Ok(listener) => listener,
+                Err(error) => {
+                    // No `Server` owns the socket yet, so its `Drop` would not remove it.
+                    if let Err(removal) = fs::remove_file(&socket) {
+                        eprintln!("statsbard: removing {} failed: {removal}", socket.display());
+                    }
+                    return Err(error.into());
+                }
+            };
         Ok(Server {
-            listener: Async::new(listener)?,
+            listener,
             socket,
             _lock: lock,
             options,
@@ -340,7 +360,15 @@ impl Client {
                 return Poll::Ready(Step::Gone);
             }
 
-            if let Some(end) = self.input.iter().position(|&byte| byte == b'\n') {
+            let end = self.input.iter().position(|&byte| byte == b'\n');
+            // Whether or not its end has arrived, so the limit is the same however reads split.
+            if end.unwrap_or(self.input.len()) > MAX_REQUEST_BYTES {
+                if let Some(change) = self.fail(ErrorReason::BadRequest, "the line is too long") {
+                    return Poll::Ready(Step::Changed(change));
+                }
+                continue;
+            }
+            if let Some(end) = end {
                 let line: Vec<u8> = self.input.drain(..=end).collect();
                 if let Some(change) = self.take_line(&line) {
                     return Poll::Ready(Step::Changed(change));
@@ -349,12 +377,6 @@ impl Client {
                 if handled == LINES_PER_TURN {
                     cx.waker().wake_by_ref();
                     return Poll::Pending;
-                }
-                continue;
-            }
-            if self.input.len() > MAX_REQUEST_BYTES {
-                if let Some(change) = self.fail(ErrorReason::BadRequest, "the line is too long") {
-                    return Poll::Ready(Step::Changed(change));
                 }
                 continue;
             }
@@ -426,6 +448,22 @@ impl Client {
         }
         self.page.take().map(|_| Change::Unwatched)
     }
+}
+
+/// Refuses a runtime directory another user could write to or read: there they could hold the
+/// lock or plant a link in the socket's place.
+fn check_private(dir: &Path) -> io::Result<()> {
+    let found = fs::metadata(dir)?;
+    if found.is_dir()
+        && found.uid() == rustix::process::geteuid().as_raw()
+        && found.mode() & SHARED == 0
+    {
+        return Ok(());
+    }
+    Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!("{} is not a directory private to this user", dir.display()),
+    ))
 }
 
 /// One try, without waiting: two short lines always fit a new socket's buffer, and a connection
