@@ -6,6 +6,7 @@ pub mod app;
 pub mod autostart;
 pub mod config;
 pub mod fsutil;
+pub mod pages;
 pub mod paths;
 pub mod power;
 pub mod run;
