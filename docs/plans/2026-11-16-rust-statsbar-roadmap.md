@@ -37,7 +37,9 @@ branch `feature/tray-spikes`, as recorded in
    *(delegated)* See "Why this shape" below.
 3. Beyond the six panels and the hub, v1 includes: temperature alerts, public IP with country flag,
    iPhone/Android battery, fan control. *(user)*
-4. Panel toolkit: GTK4 + libadwaita. *(user)*
+4. Panel toolkit: GTK4 + libadwaita, through `gtk4-rs` without relm4. *(user)* The first pick said
+   relm4; the user dropped it on 2026-11-22, because one small window does not need a second runtime
+   layer.
 5. Hardware target: this machine only — Dell laptop, Intel UHD 620 (i915), `dell_smm` fan, Ubuntu 26.04,
    GNOME Shell 50.1 on Wayland. No AMD/NVIDIA code. *(user)*
 6. The upstream repository belongs to the user; its code may be ported. *(user)*
@@ -51,9 +53,8 @@ branch `feature/tray-spikes`, as recorded in
     `statsbar-core`, `statsbard`, `statsbar-panel`, `statsbar-fan-helper`. *(default; the user named
     only the project)*
 
-**Deviation to confirm when Plan 04 is written:** the toolkit option the user picked said "via gtk4-rs
-and relm4". The plan uses `gtk4-rs` without relm4, because one small window does not need a second
-runtime layer in a process whose point is to be light. Plan 04 asks before it is executed.
+The user settled Plan 04's questions on 2026-11-22. [Plan 04a](2026-11-22-rust-statsbar-04a-ipc.md)
+lists all 17 decisions, those of Plan 04b included, under Confirmed Requirements.
 
 ## Open Questions
 
@@ -99,7 +100,8 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 - Integration tests in `crates/<name>/tests/` rather than inline `mod tests` — the test file exists and
   fails before the module does, which is what test-first needs.
 - IPC: newline-delimited JSON over a Unix socket at `$XDG_RUNTIME_DIR/statsbar.sock` — a few kilobytes
-  per second at most, and debuggable with `socat`. First line each way is a protocol version.
+  per second at most, and debuggable with `socat`. First line each way is a protocol version. The
+  socket is the user's only (mode 0600, peer uid checked), and the variable is required.
 - Config: `~/.config/statsbar/config.toml`, every key optional — an older file keeps working after an
   upgrade. Written to a temporary file and renamed.
 - Launch at login: `~/.config/autostart/statsbar.desktop` — the XDG convention.
@@ -144,14 +146,15 @@ From the user's global rules; a project `CLAUDE.md`, once the repo has one, wins
 **Budget, to be measured in Plan 11:** daemon ≤ 15 MB PSS and ≤ 0.5 % of one core averaged over five
 idle minutes with all six items visible; no panel process while the panel is closed.
 
-**Cadence** (upstream's CPU reader uses 2 s idle, 1 s with its panel open, 5 s in Low Power Mode):
+**Cadence** (upstream's CPU reader checks for an open panel first: 1 s with it open, else 5 s in Low
+Power Mode, else 2 s). The first matching row wins:
 
 | State | Interval |
 |---|---|
-| Item visible, panel closed | 2 s |
-| That metric's page open | 1 s |
-| `power-saver` profile active | 5 s |
+| That metric's page open, its item visible or hidden, under any profile | 1 s |
 | Item hidden and its page closed | not polled |
+| `power-saver` profile active | 5 s |
+| Item visible, page closed | 2 s |
 
 ## Layout
 
@@ -182,17 +185,17 @@ Linux sources were verified to exist on this machine on 2026-11-16 unless marked
 | CPU | Per-core usage, user/system/idle | `/proc/stat` | iowait counts as idle |
 | | Per-core temperature | hwmon `coretemp`: package + Core 0–3; logical → core via `topology/core_id` | |
 | | Frequency | `cpufreq/scaling_cur_freq` | No efficiency/performance split on this CPU |
-| | Thermal pressure | package temperature against `temp1_max` and `temp1_crit` | Derived, not a kernel state |
+| | Thermal pressure | package temperature: Fair from 75 °C, Serious from 90 °C, Critical from 100 °C | Derived, not a kernel state; `temp1_max` and `temp1_crit` are both 100 °C here |
 | | Low Power Mode | power-profiles-daemon active profile | |
 | | Load average ÷ cores, uptime, chip name | `/proc/loadavg`, `/proc/uptime`, `/proc/cpuinfo` | |
-| | Top processes, quit one | `/proc/<pid>/stat`; `SIGTERM`, own processes only | No app icons |
+| | Top processes, quit one | `/proc/<pid>/stat` deltas; `SIGTERM` after a confirmation, own processes only, never GNOME Shell, systemd or StatsBar | No app icons |
 | GPU | Three utilisation rings, history chart | `/proc/<pid>/fdinfo` `drm-engine-render`, `-video`, `-copy` deltas per `drm-client-id` | Own processes only; the three rings are render / video / copy, not device / render / tiler |
 | | Model, frequency | PCI id via `/usr/share/misc/pci.ids` (not yet checked for presence); `gt_act_freq_mhz` | No shader-core count |
 | | Power draw | — | Root-only; omitted |
 | | Driver-mapped memory | fdinfo `drm-total-system0` | |
 | Memory | App / Wired / Compressed / Cached / Free | `/proc/meminfo` → App / Kernel / Cached / Free; used = `MemTotal − MemAvailable`; plus swap and zswap | Compressed is a figure, not a bar segment |
-| | Pressure | `/proc/pressure/memory`: Warning at `some avg10 ≥ 10`, Critical at `full avg10 ≥ 10` | |
-| | Top processes | `/proc/<pid>/statm` (RSS) | |
+| | Pressure | `/proc/pressure/memory`: Warning at `some avg10 ≥ 10`, Critical at `full avg10 ≥ 10`; the ring fills to (kernel + zswap) ÷ total | Without PSI the level shows "—", never Normal |
+| | Top processes | `/proc/<pid>/statm`: RSS − shared | Not PSS, which is too slow and unreadable for other users' processes |
 | Network | Interface, MAC, IPv4/6, DNS | NetworkManager over D-Bus | |
 | | Wi-Fi name, signal, band, channel, rate | NetworkManager; dBm from `/proc/net/wireless` | |
 | | Throughput, session totals | `/sys/class/net/<if>/statistics/` | |
@@ -294,17 +297,31 @@ task. "Evidence" is what its end-to-end check must show.
   The extension ignores `XAyatanaLabelGuide`. 4 threads at Pss 2789 kB. The charging icon was seen
   only in tests, and the run used the user's real `~/.config`.
 
-### Plan 04 — IPC and panel skeleton (CPU and Memory pages)
-- **Needs first:** `sudo apt install libgtk-4-dev libadwaita-1-dev` — a dependency addition, so ask;
-  and confirm the relm4 deviation above.
-- **Scope:** socket server, snapshot types, subscribe/unsubscribe, single-instance panel, per-core bars,
-  memory bar, process lists with quit. Measure the Cairo renderer against GL and keep the lighter.
-- **Core additions:** `ipc::{Request, Event}` with a version handshake; `process::rank_by_cpu`,
-  `process::rank_by_memory`; `memory::Pressure::from_psi` with the thresholds in requirement 9.
-- **Tests:** protocol round-trips, unknown fields ignored, version mismatch reported; ranking ties and
-  vanished pids; PSI at, just below and above each threshold.
+### Plan 04a — Daemon IPC *(written: `docs/plans/2026-11-22-rust-statsbar-04a-ipc.md`)*
+- **Scope:** socket server with a version handshake, subscribe, unsubscribe and refresh; snapshots of
+  the CPU and Memory pages; process lists; CPU details (temperatures, frequency, load, uptime);
+  memory pressure; a hidden item's page still read while it is watched; the cadence fix; one daemon
+  at a time. Carries decisions 3–10, 12, 14–16 as far as they concern the daemon.
+- **Core additions:** `ipc::{Hello, Request, Event}`; `process::{rank_by_cpu, rank_by_memory,
+  can_quit}`; `system::Thermal::from_celsius`; `memory::Pressure::from_psi` with the thresholds in
+  requirement 9.
+- **Tests:** exact protocol lines, unknown fields ignored, version mismatch reported; ranking ties,
+  vanished and reused pids; PSI and Thermal at, just below and above each threshold; the socket's
+  bounds and uid check; the real binary on a private bus.
+- **Evidence:** a socket client's figures match `top` and `free` within one sample; a watched page
+  is read each second, also under power saver and with its item hidden; after the last watcher
+  leaves, a hidden metric's files are closed.
+
+### Plan 04b — Panel skeleton (CPU and Memory pages)
+- **Needs first:** `sudo apt install libgtk-4-dev libadwaita-1-dev` on the laptop and the same in CI
+  (approved 2026-11-22, not installed yet); Rust 1.92 as the panel's floor.
+- **Scope:** decisions 2, 11, 13 and 17, and the panel half of 3, 5, 8, 15 and 16: the GTK window
+  (reused, not duplicated); rings, per-core bars, memory bar and process lists; quit with a
+  confirmation and SIGTERM, guarded again by pid and start time; "Open details…" at the top of the
+  CPU and Memory menus, with menu rows reserved from the start; Retry when the daemon is down; a
+  Refresh footer; "—" for missing PSI. Measure the Cairo renderer against GL and keep the lighter.
 - **Evidence:** panel figures match `top` and `free` within one sample; closing the panel leaves no
-  `statsbar-panel` process and the daemon back at its 2 s cadence.
+  `statsbar-panel` process and the daemon back at its closed-page cadence.
 
 ### Plan 05 — Battery and Network pages
 - **Scope:** battery detail page; NetworkManager reader; Wi-Fi details; DNS; ping; public IP; the
