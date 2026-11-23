@@ -271,3 +271,53 @@ fn a_failed_scan_keeps_the_last_ranking_and_reports_once() {
     assert_eq!(problems[0].0, "processes");
     assert!(pages.memory(4 * SECOND, buckets()).1.is_empty());
 }
+
+#[test]
+fn a_failed_cpu_scan_keeps_the_last_ranking_and_reports_once() {
+    let machine = Machine::new("cpu-scan");
+    let mut pages = machine.pages();
+    pages.cpu(0, None, false);
+    machine.process(18, 1, 150, 18);
+    let (ranked, _) = pages.cpu(SECOND, None, false);
+    assert!(ranked.processes.is_some());
+    for pid in 11..19 {
+        fs::remove_dir_all(machine.root.join(format!("proc/{pid}"))).expect("remove");
+    }
+    let (page, problems) = pages.cpu(2 * SECOND, None, false);
+    assert_eq!(page.processes, ranked.processes);
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].0, "processes");
+    assert!(pages.cpu(3 * SECOND, None, false).1.is_empty());
+}
+
+#[test]
+fn a_pid_that_changed_hands_between_scans_leaves_the_ranking() {
+    let machine = Machine::new("cpu-pid-reuse");
+    let mut pages = machine.pages();
+    pages.cpu(0, None, false);
+    // Pid 18 is a new process now: later start, and far more CPU time than the old one had.
+    machine.process(18, 2, 5000, 18);
+    machine.process(17, 1, 150, 17);
+    let (page, _) = pages.cpu(SECOND, None, false);
+    let rows: Vec<_> = page
+        .processes
+        .expect("ranked")
+        .into_iter()
+        .map(|row| (row.process.pid, row.cpu_percent))
+        .collect();
+    assert_eq!(rows[0], (17, 50.0));
+    assert!(rows.iter().all(|(pid, _)| *pid != 18), "{rows:?}");
+}
+
+#[test]
+fn a_scan_too_soon_after_a_ranking_keeps_that_ranking() {
+    let machine = Machine::new("cpu-soon-after-ranking");
+    let mut pages = machine.pages();
+    pages.cpu(0, None, false);
+    machine.process(18, 1, 150, 18);
+    let (ranked, _) = pages.cpu(SECOND, None, false);
+    assert!(ranked.processes.is_some());
+    machine.process(17, 1, 400, 17);
+    let (soon, _) = pages.cpu(SECOND + SECOND / 2 - 1, None, false);
+    assert_eq!(soon.processes, ranked.processes);
+}
