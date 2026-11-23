@@ -87,6 +87,11 @@ fn opening_an_open_page_again_changes_nothing() {
     app.record_cpu(0, ticks(0, 0));
     app.set_page_open(Cpu, true);
     assert!(app.due(SECOND - 1).is_empty());
+    assert_eq!(
+        app.record_cpu(SECOND, ticks(25, 75)),
+        Some(25),
+        "the baseline is kept"
+    );
 }
 
 #[test]
