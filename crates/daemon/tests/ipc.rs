@@ -169,6 +169,35 @@ fn the_socket_is_private_and_removed_on_drop() {
 }
 
 #[test]
+fn the_lock_and_the_socket_are_kept_by_the_runtime_directory_cleanup() {
+    let dir = RuntimeDir::new("sticky");
+    let _server = bind(&dir);
+    let mode = |path: PathBuf| fs::metadata(path).expect("exists").permissions().mode();
+    let lock = mode(dir.0.join("statsbar.lock"));
+    let socket = mode(dir.socket());
+    // The XDG spec lets the session clean up runtime files that have neither the sticky bit
+    // nor a fresh access time.
+    assert_ne!(lock & 0o1000, 0, "lock mode {lock:o}");
+    assert_ne!(socket & 0o1000, 0, "socket mode {socket:o}");
+    assert_eq!(lock & 0o777, 0o600, "lock mode {lock:o}");
+}
+
+#[test]
+fn a_runtime_directory_others_can_read_is_refused() {
+    let dir = RuntimeDir::new("shared");
+    fs::set_permissions(&dir.0, fs::Permissions::from_mode(0o755)).expect("chmod");
+    match Server::bind(&dir.0, options()) {
+        Err(BindError::Io(error)) => {
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+        Err(other) => panic!("refused for another reason: {other:?}"),
+        Ok(_) => panic!("bound in a directory others can read"),
+    }
+    assert!(!dir.0.join("statsbar.lock").exists());
+    assert!(!dir.socket().exists());
+}
+
+#[test]
 fn a_second_server_is_refused_and_the_first_keeps_working() {
     let dir = RuntimeDir::new("second");
     let mut server = bind(&dir);
@@ -440,6 +469,34 @@ fn a_line_without_an_end_is_refused_at_the_limit() {
         let mut client = Client::greeted(&dir, &mut server).await;
         client.send(&"x".repeat(MAX_REQUEST_BYTES + 1)).await;
         client.refused(&mut server, ErrorReason::BadRequest).await;
+    });
+}
+
+/// `request` padded with spaces, which JSON allows, to `length` bytes before its newline.
+fn padded(request: &str, length: usize) -> String {
+    format!("{:<length$}\n", request.trim_end())
+}
+
+#[test]
+fn a_line_over_the_limit_is_refused_even_with_its_end() {
+    let dir = RuntimeDir::new("long-ended");
+    let mut server = bind(&dir);
+    async_io::block_on(async {
+        let mut client = Client::greeted(&dir, &mut server).await;
+        // A valid request, so only the limit can refuse it.
+        client.send(&padded(WATCH_CPU, MAX_REQUEST_BYTES + 1)).await;
+        client.refused(&mut server, ErrorReason::BadRequest).await;
+    });
+}
+
+#[test]
+fn a_line_at_the_limit_is_taken() {
+    let dir = RuntimeDir::new("at-limit");
+    let mut server = bind(&dir);
+    async_io::block_on(async {
+        let mut client = Client::greeted(&dir, &mut server).await;
+        client.send(&padded(WATCH_CPU, MAX_REQUEST_BYTES)).await;
+        assert_eq!(change(&mut server).await, Change::Subscribed(Page::Cpu));
     });
 }
 
