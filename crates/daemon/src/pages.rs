@@ -5,9 +5,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use statsbar_core::cpu::CpuLoad;
-use statsbar_core::ipc::{CpuPage, CpuProcess, MemoryPage, MemoryProcess, Page};
+use statsbar_core::ipc::{CpuPage, CpuProcess, MemoryPage, MemoryProcess, Page, ProcessInfo};
 use statsbar_core::memory::MemoryBuckets;
-use statsbar_core::process::{self, CpuSample};
+use statsbar_core::process::{self, CpuSample, CpuUse};
 use statsbar_core::system::Thermal;
 use statsbar_readers::cpu_details::CpuDetailsReader;
 use statsbar_readers::pressure::PressureReader;
@@ -93,19 +93,7 @@ impl Pages {
                             self.ticks_per_second,
                             TOP_COUNT,
                         );
-                        cpu.processes = Some(
-                            ranked
-                                .iter()
-                                .filter_map(|row| {
-                                    let process = self.reader.identify(row.pid)?;
-                                    // Otherwise the pid changed hands since the scan.
-                                    (process.start_ticks == row.start_ticks).then_some(CpuProcess {
-                                        process,
-                                        cpu_percent: row.percent,
-                                    })
-                                })
-                                .collect(),
-                        );
+                        cpu.processes = Some(label(&ranked, |pid| self.reader.identify(pid)));
                     }
                     cpu.previous = Some((now_nanos, samples));
                 }
@@ -201,6 +189,24 @@ impl Pages {
     }
 }
 
+/// Names the ranked processes, dropping those that exited or whose pid changed hands since the
+/// scan.
+fn label(
+    ranked: &[CpuUse],
+    mut identify: impl FnMut(u32) -> Option<ProcessInfo>,
+) -> Vec<CpuProcess> {
+    ranked
+        .iter()
+        .filter_map(|row| {
+            let process = identify(row.pid)?;
+            (process.start_ticks == row.start_ticks).then_some(CpuProcess {
+                process,
+                cpu_percent: row.percent,
+            })
+        })
+        .collect()
+}
+
 /// The problems that were not failing last time, which are the ones worth logging.
 fn newly_failing(failing: &mut HashSet<&'static str>, problems: Vec<Problem>) -> Vec<Problem> {
     let now: HashSet<&'static str> = problems.iter().map(|(what, _)| *what).collect();
@@ -210,4 +216,77 @@ fn newly_failing(failing: &mut HashSet<&'static str>, problems: Vec<Problem>) ->
         .collect();
     *failing = now;
     new
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn use_of(pid: u32, start_ticks: u64, percent: f64) -> CpuUse {
+        CpuUse {
+            pid,
+            start_ticks,
+            percent,
+        }
+    }
+
+    fn info(pid: u32, start_ticks: u64) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            start_ticks,
+            name: format!("p{pid}"),
+            can_quit: true,
+        }
+    }
+
+    #[test]
+    fn a_pid_that_changed_hands_since_the_scan_is_dropped() {
+        let ranked = [
+            use_of(1, 10, 90.0),
+            use_of(2, 20, 80.0),
+            use_of(3, 30, 70.0),
+        ];
+        // Pid 2 now belongs to a process that started later.
+        let rows = label(&ranked, |pid| {
+            Some(info(pid, if pid == 2 { 21 } else { pid as u64 * 10 }))
+        });
+        assert_eq!(
+            rows,
+            vec![
+                CpuProcess {
+                    process: info(1, 10),
+                    cpu_percent: 90.0
+                },
+                CpuProcess {
+                    process: info(3, 30),
+                    cpu_percent: 70.0
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_process_that_exited_since_the_scan_is_dropped() {
+        let ranked = [
+            use_of(1, 10, 90.0),
+            use_of(2, 20, 80.0),
+            use_of(3, 30, 70.0),
+        ];
+        let rows = label(&ranked, |pid| {
+            (pid != 2).then(|| info(pid, pid as u64 * 10))
+        });
+        assert_eq!(
+            rows,
+            vec![
+                CpuProcess {
+                    process: info(1, 10),
+                    cpu_percent: 90.0
+                },
+                CpuProcess {
+                    process: info(3, 30),
+                    cpu_percent: 70.0
+                },
+            ]
+        );
+    }
 }

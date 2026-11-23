@@ -291,7 +291,7 @@ fn a_failed_cpu_scan_keeps_the_last_ranking_and_reports_once() {
 }
 
 #[test]
-fn a_pid_that_changed_hands_between_scans_leaves_the_ranking() {
+fn a_pid_that_changed_hands_between_scans_starts_afresh_in_the_ranking() {
     let machine = Machine::new("cpu-pid-reuse");
     let mut pages = machine.pages();
     pages.cpu(0, None, false);
