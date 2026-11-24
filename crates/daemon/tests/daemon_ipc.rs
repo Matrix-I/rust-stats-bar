@@ -12,7 +12,9 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
+use futures_lite::{StreamExt, future};
 use statsbar_core::ipc::{CpuPage, Event, MemoryPage};
+use zbus::fdo::{DBusProxy, NameOwnerChangedStream};
 use zbus::zvariant::{OwnedValue, Value};
 
 /// Generous for a local daemon; it only has to tell "slow" from "hung". Page events come 1 s
@@ -23,6 +25,10 @@ const MAX_SKIPPED: usize = 16;
 const WATCH_CPU: &str = "{\"type\":\"subscribe\",\"page\":\"cpu\"}\n";
 const DBUSMENU: &str = "com.canonical.dbusmenu";
 const WATCH_MEMORY: &str = "{\"type\":\"subscribe\",\"page\":\"memory\"}\n";
+const REFRESH: &str = "{\"type\":\"refresh\"}\n";
+const UNWATCH: &str = "{\"type\":\"unsubscribe\"}\n";
+/// The daemon ignores a refresh sooner than this after the page's last reading.
+const MIN_REFRESH: Duration = Duration::from_millis(500);
 
 struct Watcher(mpsc::Sender<String>);
 
@@ -86,6 +92,60 @@ fn holds(daemon: &Reaped, path: &str) -> bool {
         // A descriptor may close between the listing and the read.
         .filter_map(|entry| fs::read_link(entry.path()).ok())
         .any(|target| target == Path::new(path))
+}
+
+/// The daemon's descriptors open on `path`, by number.
+fn descriptors(daemon: &Reaped, path: &str) -> Vec<String> {
+    let mut found: Vec<String> = fs::read_dir(format!("/proc/{}/fd", daemon.0.id()))
+        .expect("running")
+        .filter_map(Result::ok)
+        // A descriptor may close between the listing and the read.
+        .filter(|entry| fs::read_link(entry.path()).is_ok_and(|target| target == Path::new(path)))
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    found
+}
+
+/// The read calls the daemon has made so far, over all its threads.
+fn reads(daemon: &Reaped) -> u64 {
+    let io = fs::read_to_string(format!("/proc/{}/io", daemon.0.id())).expect("running");
+    io.lines()
+        .find_map(|line| line.strip_prefix("syscr: "))
+        .expect("a syscr line")
+        .parse()
+        .expect("a count")
+}
+
+/// Whether the daemon scanned the processes since it had made `since` reads. A scan reads every
+/// process's `statm`, so it makes at least one read per process, where a reading without one
+/// makes under ten.
+fn scanned(daemon: &Reaped, since: u64) -> bool {
+    let processes = fs::read_dir("/proc")
+        .expect("/proc")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy().parse::<u32>().is_ok())
+        .count();
+    reads(daemon) - since >= u64::try_from(processes).expect("fits")
+}
+
+/// Waits until the name followed by `changes` has no owner.
+fn released(changes: &mut NameOwnerChangedStream) {
+    async_io::block_on(future::or(
+        async {
+            for _ in 0..MAX_SKIPPED {
+                let change = changes.next().await.expect("the bus stays up");
+                if change.args().expect("arguments").new_owner().is_none() {
+                    return;
+                }
+            }
+            panic!("the name was never released");
+        },
+        async {
+            async_io::Timer::after(LIMIT).await;
+            panic!("waiting for the name's release: timed out");
+        },
+    ));
 }
 
 struct Session {
@@ -197,6 +257,17 @@ impl Session {
                 .await
                 .expect("click the row");
         });
+    }
+
+    /// Follows who owns `name`, from now on.
+    fn owner_changes(&self, name: &str) -> NameOwnerChangedStream {
+        async_io::block_on(async {
+            DBusProxy::new(&self.watcher)
+                .await?
+                .receive_name_owner_changed_with_args(&[(0, name)])
+                .await
+        })
+        .expect("follow the name")
     }
 
     fn panel(&self) -> Panel {
@@ -336,56 +407,102 @@ fn a_shown_items_page_is_sent_before_its_next_reading() {
         .expect("the CPU item registers");
     let mut first = session.panel();
     first.send(WATCH_CPU);
-    let last = first.cpu_until(|page| page.load.is_some());
+    let mut seen = vec![first.cpu_until(|page| page.load.is_some())];
     let mut second = session.panel();
-    // The next page is about a second away, so a page read before this is the welcome.
-    let before = uptime_seconds();
-    second.send(WATCH_CPU);
+    // Leaving at once, so only the welcome can reach the newcomer: the daemon answers each
+    // request before it reads the next.
+    second.send(&format!("{WATCH_CPU}{UNWATCH}"));
     let welcome = second.cpu_until(|_| true);
     assert!(welcome.load.is_some(), "the last load, at once");
-    let welcome_at = welcome.uptime_seconds.expect("uptime");
-    assert!(
-        welcome_at <= before,
-        "read at {welcome_at} s, after the subscribe at {before} s"
-    );
-    // Nothing was read for the newcomer: the first watcher's next page comes a full interval
-    // later.
-    let next = first.cpu_until(|_| true);
-    let gap = next.uptime_seconds.expect("uptime") - last.uptime_seconds.expect("uptime");
-    assert!(gap >= 0.5, "a page {gap} s after the one before");
-}
 
-/// The clock the pages' `uptime_seconds` come from.
-fn uptime_seconds() -> f64 {
-    let uptime = fs::read_to_string("/proc/uptime").expect("uptime");
-    let seconds = uptime.split_whitespace().next().expect("a first field");
-    seconds.parse().expect("seconds")
+    // The welcome is the page last published: the first watcher has it already, or gets it next
+    // when a reading landed before the subscribe.
+    let welcome_at = welcome.uptime_seconds.expect("uptime");
+    while seen.last().and_then(|page| page.uptime_seconds) < Some(welcome_at) {
+        assert!(seen.len() < MAX_SKIPPED, "the welcome was never published");
+        seen.push(first.cpu_until(|_| true));
+    }
+    assert_eq!(
+        seen.last(),
+        Some(&welcome),
+        "the welcome is a published page"
+    );
+    // Nothing was read for the newcomer: such a reading would reach the first watcher too, sooner
+    // than a full interval after the page before it.
+    seen.push(first.cpu_until(|_| true));
+    for pair in seen.windows(2) {
+        let gap = pair[1].uptime_seconds.expect("uptime") - pair[0].uptime_seconds.expect("uptime");
+        assert!(gap >= 0.5, "a page {gap} s after the one before");
+    }
 }
 
 #[test]
 fn hiding_an_item_with_its_page_open_keeps_the_page_live() {
     let session = Session::new("hiding", CPU_SHOWN);
     let (daemon, _log, hub) = session.start();
-    session
+    let item = session
         .registered
         .recv_timeout(LIMIT)
         .expect("the CPU item registers");
+    let mut item_owner = session.owner_changes(&item);
     let mut panel = session.panel();
     panel.send(WATCH_CPU);
     panel.cpu_until(|page| page.load.is_some());
+    let open = descriptors(&daemon, "/proc/stat");
+    assert_eq!(open.len(), 1, "one reader: {open:?}");
 
+    // Just after a reading, so the next one, which would reopen a closed file, is about a second
+    // away. The item's name goes after the hide has dealt with the reader.
     session.click(&hub, "Show CPU");
-    let config = session.dir.join("config/statsbar/config.toml");
-    // Saved last, so seeing it means the item has been hidden.
-    panel.cpu_until(|page| {
-        assert!(page.load.is_some(), "hiding dropped the page's baseline");
-        fs::read_to_string(&config).is_ok_and(|saved| saved.contains("cpu = false"))
-    });
+    released(&mut item_owner);
+    assert_eq!(
+        descriptors(&daemon, "/proc/stat"),
+        open,
+        "hiding closed the page's reader"
+    );
     for _ in 0..2 {
         let page = panel.cpu_until(|_| true);
         assert!(page.load.is_some(), "hiding dropped the page's baseline");
     }
-    assert!(holds(&daemon, "/proc/stat"));
+    assert_eq!(
+        descriptors(&daemon, "/proc/stat"),
+        open,
+        "the page's reader was reopened"
+    );
+}
+
+#[test]
+fn a_refresh_rescans_the_memory_page_once_half_a_second_has_passed() {
+    let session = Session::new("refresh", ALL_HIDDEN);
+    let (daemon, _log, _hub) = session.start();
+    let mut panel = session.panel();
+    panel.send(WATCH_MEMORY);
+    // The first reading scans the processes. The next is due 1 s later and scans only 2 s later.
+    panel.memory();
+    let since = reads(&daemon);
+    // Only time lets a refresh count, and nothing marks the moment. That reading came before
+    // this point, so it is at least 500 ms old after the wait, with the next one ~500 ms away.
+    std::thread::sleep(MIN_REFRESH);
+    panel.send(REFRESH);
+    let early = panel.memory();
+    assert!(
+        scanned(&daemon, since),
+        "no early reading with a scan: the regular one 1 s on does not scan"
+    );
+
+    // Read a moment ago: the refresh is ignored, and the next reading, a regular one, does not
+    // scan either.
+    let since = reads(&daemon);
+    panel.send(REFRESH);
+    let next = panel.memory();
+    assert!(
+        !scanned(&daemon, since),
+        "an ignored refresh brought the scan forward"
+    );
+    assert_eq!(
+        next.processes, early.processes,
+        "the refresh's ranking, kept"
+    );
 }
 
 #[test]
@@ -453,4 +570,26 @@ fn without_a_runtime_directory_it_says_so_and_exits() {
         session.registered.try_recv().is_err(),
         "it added no tray item"
     );
+}
+
+#[test]
+fn a_runtime_directory_others_can_read_is_refused() {
+    let session = Session::new("shared", ALL_HIDDEN);
+    fs::set_permissions(&session.dir, fs::Permissions::from_mode(0o750)).expect("chmod");
+    let mut daemon = Reaped(session.command().spawn().expect("start statsbard"));
+    let log = lines(daemon.0.stderr.take().expect("piped"));
+    let line = wait_for(&log, "private");
+    assert_eq!(
+        line,
+        format!(
+            "statsbard: cannot open the panel's socket: {} is not a directory private to this user",
+            session.dir.display()
+        )
+    );
+    assert!(!daemon.0.wait().expect("exits").success());
+    assert!(
+        session.registered.try_recv().is_err(),
+        "it added no tray item"
+    );
+    assert!(!session.dir.join("statsbar.sock").exists(), "nor a socket");
 }
