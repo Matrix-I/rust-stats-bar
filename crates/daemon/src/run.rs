@@ -1,6 +1,7 @@
 //! The daemon's event loop, on the main thread. One timer serves every reader. Menu clicks
-//! arrive from the hub, and power-profile changes from the system bus. The single `zbus`
-//! connection the daemon owns is ticked here, not on a thread of its own (spike S2).
+//! arrive from the hub, power-profile changes from the system bus, and the panel's requests from
+//! the socket. The single `zbus` connection the daemon owns is ticked here, not on a thread of its
+//! own (spike S2).
 
 use std::error::Error;
 use std::future::Future;
@@ -11,6 +12,7 @@ use std::time::{Duration, Instant};
 use async_channel::{Receiver, Sender};
 use futures_lite::{StreamExt, future};
 use ksni::{Handle, TrayMethods};
+use statsbar_core::ipc::{Event, Page};
 use statsbar_core::schedule::ReaderId;
 use statsbar_readers::battery::BatteryReader;
 use statsbar_readers::cpu::CpuReader;
@@ -18,8 +20,10 @@ use statsbar_readers::fan::FanReader;
 use statsbar_readers::memory::MemoryReader;
 use statsbar_readers::network::NetworkReader;
 
-use crate::app::{App, Command, READERS, slot};
+use crate::app::{App, Command, PAGES, READERS, page_of, reader_of, slot};
 use crate::config::Items;
+use crate::ipc::{Change, Options, Server};
+use crate::pages::{Pages, System};
 use crate::power::{ProfileWatch, is_power_saver};
 use crate::tray::{Hub, Look, MetricItem, battery_look, network_look, percent_look};
 use crate::{autostart, config, paths, summary};
@@ -68,6 +72,23 @@ fn read_with<R, T>(
 pub async fn run() -> Result<(), BoxError> {
     let config_home = paths::config_home(|key| std::env::var_os(key))
         .ok_or("neither XDG_CONFIG_HOME nor HOME is an absolute path")?;
+    let runtime_dir = paths::runtime_dir(|key| std::env::var_os(key))
+        .ok_or("XDG_RUNTIME_DIR is not an absolute path")?;
+    let system_facts = System {
+        own_uid: rustix::process::geteuid().as_raw(),
+        page_size: u64::try_from(rustix::param::page_size())?,
+        ticks_per_second: rustix::param::clock_ticks_per_second(),
+    };
+    // Before any tray item: a second daemon must leave no trace.
+    let server = Server::bind(
+        &runtime_dir,
+        Options {
+            allowed_uid: system_facts.own_uid,
+            handshake_timeout: SETUP_TIMEOUT,
+        },
+    )?;
+    let root = PathBuf::from("/");
+    let pages = Pages::new(&root, system_facts);
     let config_file = paths::config_file(&config_home);
     let autostart_file = paths::autostart_file(&config_home);
 
@@ -85,8 +106,10 @@ pub async fn run() -> Result<(), BoxError> {
     let mut daemon = Daemon::start(
         app,
         sender,
+        server,
+        pages,
         Files {
-            root: PathBuf::from("/"),
+            root,
             config: config_file,
             config_writable: loaded.writable,
             autostart: autostart_file,
@@ -166,6 +189,7 @@ enum Wake {
     CommandsClosed,
     Profile(Result<String, BoxError>),
     ProfileEnded,
+    Panel(Change),
 }
 
 struct Daemon {
@@ -176,10 +200,27 @@ struct Daemon {
     /// Indexed by `app::slot`.
     items: [Option<Handle<MetricItem>>; 5],
     readers: Readers,
+    server: Server,
+    pages: Pages,
+    /// Each page as last published, indexed by `page_slot`, for a watcher that joins later.
+    published: [Option<Event>; 2],
+}
+
+fn page_slot(page: Page) -> usize {
+    match page {
+        Page::Cpu => 0,
+        Page::Memory => 1,
+    }
 }
 
 impl Daemon {
-    async fn start(app: App, commands: Sender<Command>, files: Files) -> Result<Daemon, BoxError> {
+    async fn start(
+        app: App,
+        commands: Sender<Command>,
+        server: Server,
+        pages: Pages,
+        files: Files,
+    ) -> Result<Daemon, BoxError> {
         let hub = Hub::new(commands, app.config.items.clone(), app.launch_at_login);
         let hub = bounded("hub item spawn", SETUP_TIMEOUT, hub.spawn()).await??;
         let mut daemon = Daemon {
@@ -189,6 +230,9 @@ impl Daemon {
             hub_shown: None,
             items: Default::default(),
             readers: Readers::default(),
+            server,
+            pages,
+            published: Default::default(),
         };
         for id in READERS {
             if daemon.app.is_visible(id) {
@@ -229,6 +273,7 @@ impl Daemon {
         let start = Instant::now();
         loop {
             let now = elapsed_nanos(start);
+            self.sync_pages();
             for id in self.app.due(now) {
                 self.sample(id, now).await;
             }
@@ -267,9 +312,11 @@ impl Daemon {
                 }
             };
 
-            // Bound first, so the three futures (and their borrows of `profiles`) are gone
-            // before the arms below may reset it.
-            let wake = future::or(timer, future::or(command, profile)).await;
+            let panel = async { Wake::Panel(self.server.next().await) };
+
+            // Bound first, so the four futures (and their borrows of `profiles` and the server)
+            // are gone before the arms below change either.
+            let wake = future::or(timer, future::or(command, future::or(profile, panel))).await;
             match wake {
                 Wake::Timer => {}
                 Wake::Command(Command::Quit) | Wake::CommandsClosed => break,
@@ -278,6 +325,7 @@ impl Daemon {
                 Wake::Profile(Err(error)) => {
                     eprintln!("statsbard: reading the power profile failed: {error}");
                 }
+                Wake::Panel(change) => self.handle_panel(change, elapsed_nanos(start)),
                 Wake::ProfileEnded => {
                     eprintln!("statsbard: power profile updates ended; keeping the last value");
                     profiles = None;
@@ -334,9 +382,78 @@ impl Daemon {
             }),
         };
         match result {
-            Ok(redraw) => self.refresh_item(id, redraw).await,
+            Ok(redraw) => {
+                self.refresh_item(id, redraw).await;
+                if let Some(page) = page_of(id) {
+                    self.publish(page, now);
+                }
+            }
             Err(error) => self.read_failed(id, now, &error),
         }
+    }
+
+    /// Follows who watches each page. Run every pass, since a connection also ends when a write
+    /// to it fails.
+    fn sync_pages(&mut self) {
+        for page in PAGES {
+            let id = reader_of(page);
+            let open = self.server.watched(page);
+            self.app.set_page_open(id, open);
+            if !open {
+                self.pages.close(page);
+                self.published[page_slot(page)] = None;
+            }
+            if !self.app.is_read(id) {
+                self.readers.close(id);
+            }
+        }
+    }
+
+    fn handle_panel(&mut self, change: Change, now: u64) {
+        match change {
+            Change::Subscribed(page) => {
+                self.sync_pages();
+                // What is known already, so a shown item's page does not open empty. Nothing is
+                // read for it: a read here would be outside the cadence.
+                if let Some(event) = &self.published[page_slot(page)] {
+                    self.server.welcome(page, event);
+                }
+            }
+            Change::Refresh(page) => {
+                // An ignored refresh must not make the next reading a full scan either.
+                if self.app.refresh(reader_of(page), now) {
+                    self.pages.refresh(page);
+                }
+            }
+            Change::Unwatched => {}
+        }
+    }
+
+    /// Sends a page to its watchers. A page nobody watches costs nothing here.
+    fn publish(&mut self, page: Page, now: u64) {
+        if !self.server.watched(page) {
+            return;
+        }
+        let (event, problems) = match page {
+            Page::Cpu => {
+                let (snapshot, problems) =
+                    self.pages.cpu(now, self.app.cpu(), self.app.power_saver);
+                (Event::Cpu(snapshot), problems)
+            }
+            Page::Memory => {
+                // Nothing to show until the first reading, which is due at once.
+                let Some(&buckets) = self.app.memory() else {
+                    return;
+                };
+                let (snapshot, problems) = self.pages.memory(now, buckets);
+                (Event::Memory(snapshot), problems)
+            }
+        };
+        for (what, error) in problems {
+            eprintln!("statsbard: reading {what} for the {page:?} page failed: {error}");
+        }
+        self.server.publish(page, &event);
+        self.published[page_slot(page)] = Some(event);
     }
 
     /// Closes the reader, so the next attempt reopens its files, and logs the first failure in a
@@ -429,9 +546,12 @@ impl Daemon {
         }
     }
 
-    /// Removes the item and closes its files, so a hidden metric costs nothing.
+    /// Removes the item and, unless its page is open, closes its files: a hidden metric nobody
+    /// watches costs nothing.
     async fn hide_item(&mut self, id: ReaderId) {
-        self.readers.close(id);
+        if !self.app.is_read(id) {
+            self.readers.close(id);
+        }
         if let Some(handle) = self.items[slot(id)].take() {
             shut_down(&handle, "metric item shutdown").await;
         }

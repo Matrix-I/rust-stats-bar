@@ -22,6 +22,9 @@ pub const READERS: [ReaderId; 5] = [
     ReaderId::Network,
 ];
 
+/// Every page the panel can open.
+pub const PAGES: [Page; 2] = [Page::Cpu, Page::Memory];
+
 /// A refresh sooner than this after the last read is ignored: the next read is under a second
 /// away anyway, and a load over a few milliseconds of ticks is noise.
 const MIN_REFRESH_NANOS: u64 = 500_000_000;
@@ -32,6 +35,11 @@ pub fn reader_of(page: Page) -> ReaderId {
         Page::Cpu => ReaderId::Cpu,
         Page::Memory => ReaderId::Memory,
     }
+}
+
+/// The page that shows a reader, if one does.
+pub fn page_of(id: ReaderId) -> Option<Page> {
+    PAGES.into_iter().find(|&page| reader_of(page) == id)
 }
 
 /// A click in the hub's menu, sent from the `ksni` thread to the main loop.
