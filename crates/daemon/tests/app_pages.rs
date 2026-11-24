@@ -4,7 +4,7 @@ use statsbar_core::cpu::CoreTicks;
 use statsbar_core::ipc::Page;
 use statsbar_core::memory::MemInfo;
 use statsbar_core::schedule::ReaderId::{self, Battery, Cpu, Fan, Memory, Network};
-use statsbard::app::{App, READERS, reader_of};
+use statsbard::app::{App, READERS, page_of, reader_of};
 use statsbard::config::{Config, Items};
 use statsbard::summary;
 
@@ -220,4 +220,13 @@ fn items_without_a_page_follow_their_visibility_alone() {
     let app = only(&[Battery]);
     assert!(app.is_read(Battery));
     assert!(!app.is_read(Fan) && !app.is_read(Network));
+}
+
+#[test]
+fn only_cpu_and_memory_have_a_page() {
+    assert_eq!(page_of(Cpu), Some(Page::Cpu));
+    assert_eq!(page_of(Memory), Some(Page::Memory));
+    for id in [Battery, Fan, Network] {
+        assert_eq!(page_of(id), None, "{id:?}");
+    }
 }
