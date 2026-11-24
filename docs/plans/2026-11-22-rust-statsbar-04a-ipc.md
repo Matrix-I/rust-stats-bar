@@ -187,6 +187,7 @@ From the user's global rules and the roadmap. The repository has no `CLAUDE.md`.
 | `XDG_RUNTIME_DIR` is now required, with no `/tmp` fallback | The roadmap puts the socket there, and requirement 14 needs one private place for the lock. A graphical session always sets it. **This changes startup:** without it the daemon exits. |
 | `flock` on `statsbar.lock`, released by the kernel | Makes replacing a stale socket safe after any kind of death. |
 | Socket mode 0600 and an `SO_PEERCRED` uid check | Least privilege, as the roadmap already requires of the fan helper. |
+| The runtime directory must be the user's own and closed to group and others; the socket and lock carry the sticky bit; a request line over 4096 bytes is refused even when its newline arrives in the same read | Added in Task 7's review at the user's choice: a shared `XDG_RUNTIME_DIR` would let another user hold the lock, and the XDG spec lets unsticky files there be cleaned up. |
 | Newline-delimited JSON with a protocol line first each way | Already the roadmap's default. |
 | Fields may be added within protocol 1; a removal, rename or change of meaning raises the version | Readers ignore unknown fields, and an absent optional field reads as `None`. |
 | 4 clients, 4 KiB per line, 64 KiB unsent, 5 s handshake (checked only when nothing is left to read, so a hello that came in time counts after a stalled loop), 1 s accept backoff; per turn at most 16 requests that change nothing from one client and 8 accepts, and a client that got a change through goes to the back | Bounds. The 5 s is the daemon's existing `SETUP_TIMEOUT`. The per-turn budget keeps one client from holding up the main loop or the others. |
@@ -236,7 +237,7 @@ Mode. The wrong comment and the branch order both come from it. All callers go t
 - Produces: `pub fn interval_nanos(state: &ReaderState, power_saver: bool) -> Option<u64>`, with
   the same signature: 1 s for an open page, then 5 s under power saver, then 2 s.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Apply to `crates/core/tests/schedule.rs`:
 
@@ -256,7 +257,7 @@ diff --git a/crates/core/tests/schedule.rs b/crates/core/tests/schedule.rs
          let state = reader(ReaderId::Cpu, visible, page_open, None);
 ````
 
-- [ ] **Step 2: Run it, expect FAIL**
+- [x] **Step 2: Run it, expect FAIL**
 
 ```bash
 cargo test -p statsbar-core --test schedule
@@ -265,7 +266,7 @@ cargo test -p statsbar-core --test schedule
 Expected: one failure with `visible false, page open true, power saver true`, left
 `Some(5000000000)`, right `Some(1000000000)`, because power saver is checked first.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/core/src/schedule.rs`:
 
@@ -300,7 +301,7 @@ diff --git a/crates/core/src/schedule.rs b/crates/core/src/schedule.rs
      })
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
 cargo test -p statsbar-core --test schedule && cargo test -p statsbard --test app
@@ -308,7 +309,7 @@ cargo test -p statsbar-core --test schedule && cargo test -p statsbard --test ap
 
 Expected: every test passes; `schedule` runs 8.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: `crates/core/src/schedule.rs`, `crates/core/tests/schedule.rs` — "fix(core): read an open page every second under power saver"
 
@@ -396,7 +397,7 @@ impl Thermal {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/core/tests/pressure.rs`:
 
@@ -791,7 +792,7 @@ fn thermal_levels_are_named_as_upstream_names_them() {
 }
 ````
 
-- [ ] **Step 2: Run them, expect FAIL**
+- [x] **Step 2: Run them, expect FAIL**
 
 ```bash
 cargo test -p statsbar-core --test process --test system --test pressure
@@ -800,7 +801,7 @@ cargo test -p statsbar-core --test process --test system --test pressure
 Expected: the tests do not compile (E0432 for `process`, `system` and `Pressure`; E0599 for
 `pressure_fraction`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/core/src/lib.rs`:
 
@@ -1136,7 +1137,7 @@ impl Thermal {
 }
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
 cargo test -p statsbar-core && ./scripts/check-core-purity.sh
@@ -1145,7 +1146,7 @@ cargo test -p statsbar-core && ./scripts/check-core-purity.sh
 Expected: `process` 17, `system` 8 and `pressure` 4 pass, with every older test, and
 `core purity: ok`.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: the files listed above — "feat(core): rank processes and derive thermal and pressure levels"
 
@@ -1241,7 +1242,7 @@ pub struct MemoryPage {
 pub mod ipc;
 ```
 
-- [ ] **Step 1: Add the approved dependencies and write the failing tests**
+- [x] **Step 1: Add the approved dependencies and write the failing tests**
 
 The manifests and the lock file go first, so that the only failure is the missing protocol. The
 lock diff pins what was audited; do not run `cargo update`.
@@ -1521,7 +1522,7 @@ fn an_unknown_request_or_page_does_not_parse() {
 }
 ````
 
-- [ ] **Step 2: Run them, expect FAIL**
+- [x] **Step 2: Run them, expect FAIL**
 
 ```bash
 cargo test -p statsbard --test protocol
@@ -1529,7 +1530,7 @@ cargo test -p statsbard --test protocol
 
 Expected: the test does not compile (E0432, `statsbar_core::ipc`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/core/src/cpu.rs`:
 
@@ -1756,7 +1757,7 @@ diff --git a/crates/core/src/system.rs b/crates/core/src/system.rs
      Fair,
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
 cargo test -p statsbard --test protocol && cargo test -p statsbar-core && ./scripts/check-core-purity.sh
@@ -1764,7 +1765,7 @@ cargo test -p statsbard --test protocol && cargo test -p statsbar-core && ./scri
 
 Expected: `protocol` 8 pass, with every core test, and `core purity: ok`.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: the files listed above — "feat(core): define the panel protocol"
 
@@ -1833,13 +1834,13 @@ impl ProcessReader {
 }
 ```
 
-- [ ] **Step 1: Run the covering test of the move, expect PASS**
+- [x] **Step 1: Run the covering test of the move, expect PASS**
 
 ```bash
 cargo test -p statsbar-readers --test fan
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `crates/readers/tests/cpu_details.rs`:
 
@@ -2326,7 +2327,7 @@ impl Tree {
 }
 ````
 
-- [ ] **Step 3: Run them, expect FAIL**
+- [x] **Step 3: Run them, expect FAIL**
 
 ```bash
 cargo test -p statsbar-readers --test processes --test cpu_details --test pressure
@@ -2334,7 +2335,7 @@ cargo test -p statsbar-readers --test processes --test cpu_details --test pressu
 
 Expected: the tests do not compile (E0432 for the three reader modules).
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Create `crates/readers/src/cpu_details.rs`:
 
@@ -2828,7 +2829,7 @@ diff --git a/crates/readers/src/procfile.rs b/crates/readers/src/procfile.rs
 +}
 ````
 
-- [ ] **Step 5: Run, expect PASS**
+- [x] **Step 5: Run, expect PASS**
 
 ```bash
 cargo test -p statsbar-readers
@@ -2837,7 +2838,7 @@ cargo test -p statsbar-readers
 Expected: `processes` 10, `cpu_details` 8 and `pressure` 4 pass, and so does `fan`, unchanged. The
 real-root tests accept a machine without coretemp, cpufreq or PSI, as a CI runner may be.
 
-- [ ] **Step 6: Checkpoint**
+- [x] **Step 6: Checkpoint**
 
 Ready to commit: the files listed above — "feat(readers): read processes, CPU details and memory pressure"
 
@@ -2865,7 +2866,7 @@ impl App {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/daemon/tests/app_pages.rs`:
 
@@ -2959,6 +2960,11 @@ fn opening_an_open_page_again_changes_nothing() {
     app.record_cpu(0, ticks(0, 0));
     app.set_page_open(Cpu, true);
     assert!(app.due(SECOND - 1).is_empty());
+    assert_eq!(
+        app.record_cpu(SECOND, ticks(25, 75)),
+        Some(25),
+        "the baseline is kept"
+    );
 }
 
 #[test]
@@ -3090,7 +3096,7 @@ fn items_without_a_page_follow_their_visibility_alone() {
 }
 ````
 
-- [ ] **Step 2: Run them, expect FAIL**
+- [x] **Step 2: Run them, expect FAIL**
 
 ```bash
 cargo test -p statsbard --test app_pages
@@ -3099,7 +3105,7 @@ cargo test -p statsbard --test app_pages
 Expected: the test does not compile (E0432 for `reader_of`; E0599 for `set_page_open`, `is_read`
 and `refresh`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/daemon/src/app.rs`:
 
@@ -3248,7 +3254,7 @@ diff --git a/crates/daemon/src/app.rs b/crates/daemon/src/app.rs
      pub fn record_cpu(&mut self, now_nanos: u64, ticks: Vec<CoreTicks>) -> Option<u8> {
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
 cargo test -p statsbard --test app_pages --test app
@@ -3256,7 +3262,7 @@ cargo test -p statsbard --test app_pages --test app
 
 Expected: `app_pages` 15 and `app` 22 pass.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: `crates/daemon/src/app.rs`, `crates/daemon/tests/app_pages.rs` — "feat(daemon): track which pages are open"
 
@@ -3296,7 +3302,7 @@ impl Pages {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/daemon/tests/pages.rs`:
 
@@ -3574,9 +3580,59 @@ fn a_failed_scan_keeps_the_last_ranking_and_reports_once() {
     assert_eq!(problems[0].0, "processes");
     assert!(pages.memory(4 * SECOND, buckets()).1.is_empty());
 }
+
+#[test]
+fn a_failed_cpu_scan_keeps_the_last_ranking_and_reports_once() {
+    let machine = Machine::new("cpu-scan");
+    let mut pages = machine.pages();
+    pages.cpu(0, None, false);
+    machine.process(18, 1, 150, 18);
+    let (ranked, _) = pages.cpu(SECOND, None, false);
+    assert!(ranked.processes.is_some());
+    for pid in 11..19 {
+        fs::remove_dir_all(machine.root.join(format!("proc/{pid}"))).expect("remove");
+    }
+    let (page, problems) = pages.cpu(2 * SECOND, None, false);
+    assert_eq!(page.processes, ranked.processes);
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].0, "processes");
+    assert!(pages.cpu(3 * SECOND, None, false).1.is_empty());
+}
+
+#[test]
+fn a_pid_that_changed_hands_between_scans_starts_afresh_in_the_ranking() {
+    let machine = Machine::new("cpu-pid-reuse");
+    let mut pages = machine.pages();
+    pages.cpu(0, None, false);
+    // Pid 18 is a new process now: later start, and far more CPU time than the old one had.
+    machine.process(18, 2, 5000, 18);
+    machine.process(17, 1, 150, 17);
+    let (page, _) = pages.cpu(SECOND, None, false);
+    let rows: Vec<_> = page
+        .processes
+        .expect("ranked")
+        .into_iter()
+        .map(|row| (row.process.pid, row.cpu_percent))
+        .collect();
+    assert_eq!(rows[0], (17, 50.0));
+    assert!(rows.iter().all(|(pid, _)| *pid != 18), "{rows:?}");
+}
+
+#[test]
+fn a_scan_too_soon_after_a_ranking_keeps_that_ranking() {
+    let machine = Machine::new("cpu-soon-after-ranking");
+    let mut pages = machine.pages();
+    pages.cpu(0, None, false);
+    machine.process(18, 1, 150, 18);
+    let (ranked, _) = pages.cpu(SECOND, None, false);
+    assert!(ranked.processes.is_some());
+    machine.process(17, 1, 400, 17);
+    let (soon, _) = pages.cpu(SECOND + SECOND / 2 - 1, None, false);
+    assert_eq!(soon.processes, ranked.processes);
+}
 ````
 
-- [ ] **Step 2: Run them, expect FAIL**
+- [x] **Step 2: Run them, expect FAIL**
 
 ```bash
 cargo test -p statsbard --test pages
@@ -3584,7 +3640,7 @@ cargo test -p statsbard --test pages
 
 Expected: the test does not compile (E0432, `statsbard::pages`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/daemon/src/lib.rs`:
 
@@ -3612,9 +3668,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use statsbar_core::cpu::CpuLoad;
-use statsbar_core::ipc::{CpuPage, CpuProcess, MemoryPage, MemoryProcess, Page};
+use statsbar_core::ipc::{CpuPage, CpuProcess, MemoryPage, MemoryProcess, Page, ProcessInfo};
 use statsbar_core::memory::MemoryBuckets;
-use statsbar_core::process::{self, CpuSample};
+use statsbar_core::process::{self, CpuSample, CpuUse};
 use statsbar_core::system::Thermal;
 use statsbar_readers::cpu_details::CpuDetailsReader;
 use statsbar_readers::pressure::PressureReader;
@@ -3700,19 +3756,7 @@ impl Pages {
                             self.ticks_per_second,
                             TOP_COUNT,
                         );
-                        cpu.processes = Some(
-                            ranked
-                                .iter()
-                                .filter_map(|row| {
-                                    let process = self.reader.identify(row.pid)?;
-                                    // Otherwise the pid changed hands since the scan.
-                                    (process.start_ticks == row.start_ticks).then_some(CpuProcess {
-                                        process,
-                                        cpu_percent: row.percent,
-                                    })
-                                })
-                                .collect(),
-                        );
+                        cpu.processes = Some(label(&ranked, |pid| self.reader.identify(pid)));
                     }
                     cpu.previous = Some((now_nanos, samples));
                 }
@@ -3808,6 +3852,24 @@ impl Pages {
     }
 }
 
+/// Names the ranked processes, dropping those that exited or whose pid changed hands since the
+/// scan.
+fn label(
+    ranked: &[CpuUse],
+    mut identify: impl FnMut(u32) -> Option<ProcessInfo>,
+) -> Vec<CpuProcess> {
+    ranked
+        .iter()
+        .filter_map(|row| {
+            let process = identify(row.pid)?;
+            (process.start_ticks == row.start_ticks).then_some(CpuProcess {
+                process,
+                cpu_percent: row.percent,
+            })
+        })
+        .collect()
+}
+
 /// The problems that were not failing last time, which are the ones worth logging.
 fn newly_failing(failing: &mut HashSet<&'static str>, problems: Vec<Problem>) -> Vec<Problem> {
     let now: HashSet<&'static str> = problems.iter().map(|(what, _)| *what).collect();
@@ -3818,17 +3880,90 @@ fn newly_failing(failing: &mut HashSet<&'static str>, problems: Vec<Problem>) ->
     *failing = now;
     new
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn use_of(pid: u32, start_ticks: u64, percent: f64) -> CpuUse {
+        CpuUse {
+            pid,
+            start_ticks,
+            percent,
+        }
+    }
+
+    fn info(pid: u32, start_ticks: u64) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            start_ticks,
+            name: format!("p{pid}"),
+            can_quit: true,
+        }
+    }
+
+    #[test]
+    fn a_pid_that_changed_hands_since_the_scan_is_dropped() {
+        let ranked = [
+            use_of(1, 10, 90.0),
+            use_of(2, 20, 80.0),
+            use_of(3, 30, 70.0),
+        ];
+        // Pid 2 now belongs to a process that started later.
+        let rows = label(&ranked, |pid| {
+            Some(info(pid, if pid == 2 { 21 } else { pid as u64 * 10 }))
+        });
+        assert_eq!(
+            rows,
+            vec![
+                CpuProcess {
+                    process: info(1, 10),
+                    cpu_percent: 90.0
+                },
+                CpuProcess {
+                    process: info(3, 30),
+                    cpu_percent: 70.0
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_process_that_exited_since_the_scan_is_dropped() {
+        let ranked = [
+            use_of(1, 10, 90.0),
+            use_of(2, 20, 80.0),
+            use_of(3, 30, 70.0),
+        ];
+        let rows = label(&ranked, |pid| {
+            (pid != 2).then(|| info(pid, pid as u64 * 10))
+        });
+        assert_eq!(
+            rows,
+            vec![
+                CpuProcess {
+                    process: info(1, 10),
+                    cpu_percent: 90.0
+                },
+                CpuProcess {
+                    process: info(3, 30),
+                    cpu_percent: 70.0
+                },
+            ]
+        );
+    }
+}
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
 cargo test -p statsbard --test pages
 ```
 
-Expected: 10 pass.
+Expected: 13 pass.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: the files listed above — "feat(daemon): build CPU and memory page snapshots"
 
@@ -3846,6 +3981,7 @@ check is an authorization check: flag it in the PR and review it in Task 9.
 - Modify: `crates/daemon/src/lib.rs` (lines after 8)
 - Modify: `crates/daemon/src/paths.rs` (lines after 24)
 - Create: `crates/daemon/tests/ipc.rs`
+- Create: `crates/daemon/tests/ipc_accept_failure.rs`
 - Modify: `crates/daemon/tests/paths.rs` (lines 4, after 47)
 
 **Interfaces:**
@@ -3888,7 +4024,7 @@ pub mod ipc;
 pub fn runtime_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf>;
 ```
 
-- [ ] **Step 1: Promote the dependencies and write the failing tests**
+- [x] **Step 1: Promote the dependencies and write the failing tests**
 
 Apply to `Cargo.lock`:
 
@@ -4099,6 +4235,35 @@ fn the_socket_is_private_and_removed_on_drop() {
         .mode();
     assert_eq!(mode & 0o777, 0o600);
     drop(server);
+    assert!(!dir.socket().exists());
+}
+
+#[test]
+fn the_lock_and_the_socket_are_kept_by_the_runtime_directory_cleanup() {
+    let dir = RuntimeDir::new("sticky");
+    let _server = bind(&dir);
+    let mode = |path: PathBuf| fs::metadata(path).expect("exists").permissions().mode();
+    let lock = mode(dir.0.join("statsbar.lock"));
+    let socket = mode(dir.socket());
+    // The XDG spec lets the session clean up runtime files that have neither the sticky bit
+    // nor a fresh access time.
+    assert_ne!(lock & 0o1000, 0, "lock mode {lock:o}");
+    assert_ne!(socket & 0o1000, 0, "socket mode {socket:o}");
+    assert_eq!(lock & 0o777, 0o600, "lock mode {lock:o}");
+}
+
+#[test]
+fn a_runtime_directory_others_can_read_is_refused() {
+    let dir = RuntimeDir::new("shared");
+    fs::set_permissions(&dir.0, fs::Permissions::from_mode(0o755)).expect("chmod");
+    match Server::bind(&dir.0, options()) {
+        Err(BindError::Io(error)) => {
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+        Err(other) => panic!("refused for another reason: {other:?}"),
+        Ok(_) => panic!("bound in a directory others can read"),
+    }
+    assert!(!dir.0.join("statsbar.lock").exists());
     assert!(!dir.socket().exists());
 }
 
@@ -4377,6 +4542,34 @@ fn a_line_without_an_end_is_refused_at_the_limit() {
     });
 }
 
+/// `request` padded with spaces, which JSON allows, to `length` bytes before its newline.
+fn padded(request: &str, length: usize) -> String {
+    format!("{:<length$}\n", request.trim_end())
+}
+
+#[test]
+fn a_line_over_the_limit_is_refused_even_with_its_end() {
+    let dir = RuntimeDir::new("long-ended");
+    let mut server = bind(&dir);
+    async_io::block_on(async {
+        let mut client = Client::greeted(&dir, &mut server).await;
+        // A valid request, so only the limit can refuse it.
+        client.send(&padded(WATCH_CPU, MAX_REQUEST_BYTES + 1)).await;
+        client.refused(&mut server, ErrorReason::BadRequest).await;
+    });
+}
+
+#[test]
+fn a_line_at_the_limit_is_taken() {
+    let dir = RuntimeDir::new("at-limit");
+    let mut server = bind(&dir);
+    async_io::block_on(async {
+        let mut client = Client::greeted(&dir, &mut server).await;
+        client.send(&padded(WATCH_CPU, MAX_REQUEST_BYTES)).await;
+        assert_eq!(change(&mut server).await, Change::Subscribed(Page::Cpu));
+    });
+}
+
 #[test]
 fn a_client_that_never_greets_is_timed_out() {
     let dir = RuntimeDir::new("handshake");
@@ -4463,6 +4656,177 @@ fn a_client_that_stops_reading_is_dropped_instead_of_buffered() {
 }
 ````
 
+Create `crates/daemon/tests/ipc_accept_failure.rs` (its own binary, because it lowers the open-file limit of the whole process):
+
+````rust
+//! A failing accept backs off instead of spinning. Its own test binary: lowering the process's
+//! file limit would break any test running beside it.
+
+use std::fs::{self, File};
+use std::future::Future;
+use std::io::{ErrorKind, Read};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
+use std::pin::pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::task::{Context, Poll, Wake, Waker};
+use std::time::Duration;
+
+use async_io::Async;
+use futures_lite::future;
+use futures_lite::io::AsyncReadExt;
+use rustix::io::Errno;
+use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
+use statsbard::ipc::{Options, Server};
+
+/// Generous for a local socket; it only has to tell "slow" from "hung".
+const LIMIT: Duration = Duration::from_secs(5);
+const HELLO: &[u8] = b"{\"protocol\":1}\n";
+/// Low enough that filling every free descriptor below it is quick.
+const FILE_LIMIT: u64 = 256;
+
+/// A short private directory: a socket path is limited to 108 bytes.
+struct RuntimeDir(PathBuf);
+
+impl RuntimeDir {
+    fn new(name: &str) -> RuntimeDir {
+        let dir = std::env::temp_dir().join(format!("sbar-{}-{name}", std::process::id()));
+        fs::create_dir(&dir).expect("create the runtime directory");
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).expect("chmod");
+        RuntimeDir(dir)
+    }
+}
+
+impl Drop for RuntimeDir {
+    fn drop(&mut self) {
+        // Only scratch files are left, and a failure here must not hide the test's own.
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Takes every free descriptor, so the next one asked for fails with EMFILE. Dropping it gives
+/// them back and restores the file limit, also when the test panics.
+struct NoFreeDescriptors {
+    original: Rlimit,
+    taken: Vec<File>,
+}
+
+impl NoFreeDescriptors {
+    fn take() -> NoFreeDescriptors {
+        let original = getrlimit(Resource::Nofile);
+        let lowered = Rlimit {
+            current: Some(
+                original
+                    .current
+                    .map_or(FILE_LIMIT, |soft| soft.min(FILE_LIMIT)),
+            ),
+            maximum: original.maximum,
+        };
+        setrlimit(Resource::Nofile, lowered).expect("lower the file limit");
+        let mut held = NoFreeDescriptors {
+            original,
+            taken: Vec::new(),
+        };
+        loop {
+            match File::open("/dev/null") {
+                Ok(file) => held.taken.push(file),
+                Err(error) if Errno::from_io_error(&error) == Some(Errno::MFILE) => return held,
+                Err(error) => panic!("taking a descriptor failed: {error}"),
+            }
+            assert!(
+                held.taken.len() as u64 <= FILE_LIMIT,
+                "the file limit did not hold"
+            );
+        }
+    }
+}
+
+impl Drop for NoFreeDescriptors {
+    fn drop(&mut self) {
+        self.taken.clear();
+        // Not a panic: this also runs while a failed test unwinds.
+        if let Err(error) = setrlimit(Resource::Nofile, self.original) {
+            eprintln!("restoring the file limit failed: {error}");
+        }
+    }
+}
+
+/// Counts wake-ups, which a spinning loop asks for on every turn.
+#[derive(Default)]
+struct WakeCount(AtomicUsize);
+
+impl Wake for WakeCount {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// Polls the server once and reports whether it asked to be polled again at once.
+fn turn(server: &mut Server) -> (Poll<statsbard::ipc::Change>, usize) {
+    let count = Arc::new(WakeCount::default());
+    let waker = Waker::from(count.clone());
+    let polled = pin!(server.next()).poll(&mut Context::from_waker(&waker));
+    (polled, count.0.load(Ordering::SeqCst))
+}
+
+fn has_nothing(client: &Async<UnixStream>) -> bool {
+    let mut byte = [0];
+    let mut stream = client.get_ref();
+    matches!(
+        stream.read(&mut byte),
+        Err(error) if error.kind() == ErrorKind::WouldBlock
+    )
+}
+
+#[test]
+fn a_failing_accept_waits_before_it_is_retried() {
+    let dir = RuntimeDir::new("emfile");
+    let options = Options {
+        allowed_uid: rustix::process::geteuid().as_raw(),
+        handshake_timeout: LIMIT,
+    };
+    let mut server = Server::bind(&dir.0, options).expect("bind");
+    let mut client = async_io::block_on(Async::<UnixStream>::connect(dir.0.join("statsbar.sock")))
+        .expect("connect");
+
+    let held = NoFreeDescriptors::take();
+    let (polled, wakes) = turn(&mut server);
+    assert!(polled.is_pending(), "{polled:?}");
+    assert_eq!(wakes, 0, "the server asked to be polled again at once");
+    drop(held);
+    assert!(has_nothing(&client), "accepted without a free descriptor");
+
+    // A descriptor is free now, but the retry is not due yet.
+    let (polled, wakes) = turn(&mut server);
+    assert!(polled.is_pending(), "{polled:?}");
+    assert_eq!(wakes, 0);
+    assert!(has_nothing(&client), "retried before the backoff");
+
+    let mut hello = [0; HELLO.len()];
+    async_io::block_on(future::or(
+        async {
+            future::or(client.read_exact(&mut hello), async {
+                let change = server.next().await;
+                panic!("unexpected {change:?}")
+            })
+            .await
+            .expect("the daemon's hello");
+        },
+        async {
+            async_io::Timer::after(LIMIT).await;
+            panic!("the retry timed out after {LIMIT:?}")
+        },
+    ));
+    assert_eq!(hello, HELLO);
+}
+````
+
 Apply to `crates/daemon/tests/paths.rs`:
 
 ````diff
@@ -4493,15 +4857,15 @@ diff --git a/crates/daemon/tests/paths.rs b/crates/daemon/tests/paths.rs
 +}
 ````
 
-- [ ] **Step 2: Run them, expect FAIL**
+- [x] **Step 2: Run them, expect FAIL**
 
 ```bash
-cargo test -p statsbard --test ipc --test paths
+cargo test -p statsbard --test ipc --test ipc_accept_failure --test paths
 ```
 
 Expected: the tests do not compile (E0432 for `statsbard::ipc` and `runtime_dir`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/core/src/ipc.rs`:
 
@@ -4533,7 +4897,7 @@ use std::fmt;
 use std::fs::{self, File};
 use std::future::{Future, poll_fn};
 use std::io;
-use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -4548,6 +4912,11 @@ use statsbar_core::ipc::{ErrorReason, Event, Hello, PROTOCOL_VERSION, Page, Requ
 const SOCKET: &str = "statsbar.sock";
 const LOCK: &str = "statsbar.lock";
 const PRIVATE: u32 = 0o600;
+/// The XDG Base Directory spec lets the session clean up runtime files that have neither this
+/// bit nor a fresh access time. A removed lock would let a second daemon start.
+const STICKY: u32 = 0o1000;
+/// Group and other permission bits.
+const SHARED: u32 = 0o077;
 /// One panel is the norm; the rest is room for `socat` and a panel that is restarting.
 pub const MAX_CLIENTS: usize = 4;
 /// The longest request is under 50 bytes.
@@ -4642,6 +5011,7 @@ impl Server {
     /// Claims the runtime directory for this daemon, then listens there. The lock is what makes
     /// replacing a leftover socket safe: its owner is known to be gone.
     pub fn bind(runtime_dir: &Path, options: Options) -> Result<Server, BindError> {
+        check_private(runtime_dir)?;
         // `truncate(false)`: the file only carries the lock.
         let lock = File::options()
             .write(true)
@@ -4653,6 +5023,8 @@ impl Server {
             Err(rustix::io::Errno::WOULDBLOCK) => return Err(BindError::AlreadyRunning),
             Err(error) => return Err(BindError::Io(error.into())),
         }
+        // Only once the lock is ours, so a running daemon's file is left as it is.
+        lock.set_permissions(fs::Permissions::from_mode(PRIVATE | STICKY))?;
 
         let socket = runtime_dir.join(SOCKET);
         match fs::symlink_metadata(&socket) {
@@ -4667,9 +5039,21 @@ impl Server {
             Err(error) => return Err(error.into()),
         }
         let listener = UnixListener::bind(&socket)?;
-        fs::set_permissions(&socket, fs::Permissions::from_mode(PRIVATE))?;
+        let listener =
+            match fs::set_permissions(&socket, fs::Permissions::from_mode(PRIVATE | STICKY))
+                .and_then(|()| Async::new(listener))
+            {
+                Ok(listener) => listener,
+                Err(error) => {
+                    // No `Server` owns the socket yet, so its `Drop` would not remove it.
+                    if let Err(removal) = fs::remove_file(&socket) {
+                        eprintln!("statsbard: removing {} failed: {removal}", socket.display());
+                    }
+                    return Err(error.into());
+                }
+            };
         Ok(Server {
-            listener: Async::new(listener)?,
+            listener,
             socket,
             _lock: lock,
             options,
@@ -4866,7 +5250,15 @@ impl Client {
                 return Poll::Ready(Step::Gone);
             }
 
-            if let Some(end) = self.input.iter().position(|&byte| byte == b'\n') {
+            let end = self.input.iter().position(|&byte| byte == b'\n');
+            // Whether or not its end has arrived, so the limit is the same however reads split.
+            if end.unwrap_or(self.input.len()) > MAX_REQUEST_BYTES {
+                if let Some(change) = self.fail(ErrorReason::BadRequest, "the line is too long") {
+                    return Poll::Ready(Step::Changed(change));
+                }
+                continue;
+            }
+            if let Some(end) = end {
                 let line: Vec<u8> = self.input.drain(..=end).collect();
                 if let Some(change) = self.take_line(&line) {
                     return Poll::Ready(Step::Changed(change));
@@ -4875,12 +5267,6 @@ impl Client {
                 if handled == LINES_PER_TURN {
                     cx.waker().wake_by_ref();
                     return Poll::Pending;
-                }
-                continue;
-            }
-            if self.input.len() > MAX_REQUEST_BYTES {
-                if let Some(change) = self.fail(ErrorReason::BadRequest, "the line is too long") {
-                    return Poll::Ready(Step::Changed(change));
                 }
                 continue;
             }
@@ -4954,6 +5340,22 @@ impl Client {
     }
 }
 
+/// Refuses a runtime directory another user could write to or read: there they could hold the
+/// lock or plant a link in the socket's place.
+fn check_private(dir: &Path) -> io::Result<()> {
+    let found = fs::metadata(dir)?;
+    if found.is_dir()
+        && found.uid() == rustix::process::geteuid().as_raw()
+        && found.mode() & SHARED == 0
+    {
+        return Ok(());
+    }
+    Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!("{} is not a directory private to this user", dir.display()),
+    ))
+}
+
 /// One try, without waiting: two short lines always fit a new socket's buffer, and a connection
 /// over the limit gets no state of its own.
 fn refuse_busy(stream: &Async<UnixStream>, hello: Vec<u8>) {
@@ -5012,15 +5414,15 @@ diff --git a/crates/daemon/src/paths.rs b/crates/daemon/src/paths.rs
 +}
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
-cargo test -p statsbard --test ipc --test paths
+cargo test -p statsbard --test ipc --test ipc_accept_failure --test paths
 ```
 
-Expected: `ipc` 23 pass, and so does every `paths` test.
+Expected: `ipc` 27 pass, `ipc_accept_failure` 1 passes, and so does every `paths` test.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: the files listed above — "feat(daemon): serve a private panel socket"
 
@@ -5048,7 +5450,7 @@ pub const PAGES: [Page; 2] = [Page::Cpu, Page::Memory];
 pub fn page_of(id: ReaderId) -> Option<Page>;
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Apply to `crates/daemon/tests/app_pages.rs`:
 
@@ -5065,7 +5467,7 @@ diff --git a/crates/daemon/tests/app_pages.rs b/crates/daemon/tests/app_pages.rs
  use statsbard::config::{Config, Items};
  use statsbard::summary;
 
-@@ -216,3 +216,12 @@ fn items_without_a_page_follow_their_visibility_alone() {
+@@ -221,3 +221,12 @@ fn items_without_a_page_follow_their_visibility_alone() {
      assert!(app.is_read(Battery));
      assert!(!app.is_read(Fan) && !app.is_read(Network));
  }
@@ -5097,7 +5499,9 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
+use futures_lite::{StreamExt, future};
 use statsbar_core::ipc::{CpuPage, Event, MemoryPage};
+use zbus::fdo::{DBusProxy, NameOwnerChangedStream};
 use zbus::zvariant::{OwnedValue, Value};
 
 /// Generous for a local daemon; it only has to tell "slow" from "hung". Page events come 1 s
@@ -5108,6 +5512,10 @@ const MAX_SKIPPED: usize = 16;
 const WATCH_CPU: &str = "{\"type\":\"subscribe\",\"page\":\"cpu\"}\n";
 const DBUSMENU: &str = "com.canonical.dbusmenu";
 const WATCH_MEMORY: &str = "{\"type\":\"subscribe\",\"page\":\"memory\"}\n";
+const REFRESH: &str = "{\"type\":\"refresh\"}\n";
+const UNWATCH: &str = "{\"type\":\"unsubscribe\"}\n";
+/// The daemon ignores a refresh sooner than this after the page's last reading.
+const MIN_REFRESH: Duration = Duration::from_millis(500);
 
 struct Watcher(mpsc::Sender<String>);
 
@@ -5171,6 +5579,60 @@ fn holds(daemon: &Reaped, path: &str) -> bool {
         // A descriptor may close between the listing and the read.
         .filter_map(|entry| fs::read_link(entry.path()).ok())
         .any(|target| target == Path::new(path))
+}
+
+/// The daemon's descriptors open on `path`, by number.
+fn descriptors(daemon: &Reaped, path: &str) -> Vec<String> {
+    let mut found: Vec<String> = fs::read_dir(format!("/proc/{}/fd", daemon.0.id()))
+        .expect("running")
+        .filter_map(Result::ok)
+        // A descriptor may close between the listing and the read.
+        .filter(|entry| fs::read_link(entry.path()).is_ok_and(|target| target == Path::new(path)))
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    found
+}
+
+/// The read calls the daemon has made so far, over all its threads.
+fn reads(daemon: &Reaped) -> u64 {
+    let io = fs::read_to_string(format!("/proc/{}/io", daemon.0.id())).expect("running");
+    io.lines()
+        .find_map(|line| line.strip_prefix("syscr: "))
+        .expect("a syscr line")
+        .parse()
+        .expect("a count")
+}
+
+/// Whether the daemon scanned the processes since it had made `since` reads. A scan reads every
+/// process's `statm`, so it makes at least one read per process, where a reading without one
+/// makes under ten.
+fn scanned(daemon: &Reaped, since: u64) -> bool {
+    let processes = fs::read_dir("/proc")
+        .expect("/proc")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy().parse::<u32>().is_ok())
+        .count();
+    reads(daemon) - since >= u64::try_from(processes).expect("fits")
+}
+
+/// Waits until the name followed by `changes` has no owner.
+fn released(changes: &mut NameOwnerChangedStream) {
+    async_io::block_on(future::or(
+        async {
+            for _ in 0..MAX_SKIPPED {
+                let change = changes.next().await.expect("the bus stays up");
+                if change.args().expect("arguments").new_owner().is_none() {
+                    return;
+                }
+            }
+            panic!("the name was never released");
+        },
+        async {
+            async_io::Timer::after(LIMIT).await;
+            panic!("waiting for the name's release: timed out");
+        },
+    ));
 }
 
 struct Session {
@@ -5282,6 +5744,17 @@ impl Session {
                 .await
                 .expect("click the row");
         });
+    }
+
+    /// Follows who owns `name`, from now on.
+    fn owner_changes(&self, name: &str) -> NameOwnerChangedStream {
+        async_io::block_on(async {
+            DBusProxy::new(&self.watcher)
+                .await?
+                .receive_name_owner_changed_with_args(&[(0, name)])
+                .await
+        })
+        .expect("follow the name")
     }
 
     fn panel(&self) -> Panel {
@@ -5421,56 +5894,102 @@ fn a_shown_items_page_is_sent_before_its_next_reading() {
         .expect("the CPU item registers");
     let mut first = session.panel();
     first.send(WATCH_CPU);
-    let last = first.cpu_until(|page| page.load.is_some());
+    let mut seen = vec![first.cpu_until(|page| page.load.is_some())];
     let mut second = session.panel();
-    // The next page is about a second away, so a page read before this is the welcome.
-    let before = uptime_seconds();
-    second.send(WATCH_CPU);
+    // Leaving at once, so only the welcome can reach the newcomer: the daemon answers each
+    // request before it reads the next.
+    second.send(&format!("{WATCH_CPU}{UNWATCH}"));
     let welcome = second.cpu_until(|_| true);
     assert!(welcome.load.is_some(), "the last load, at once");
-    let welcome_at = welcome.uptime_seconds.expect("uptime");
-    assert!(
-        welcome_at <= before,
-        "read at {welcome_at} s, after the subscribe at {before} s"
-    );
-    // Nothing was read for the newcomer: the first watcher's next page comes a full interval
-    // later.
-    let next = first.cpu_until(|_| true);
-    let gap = next.uptime_seconds.expect("uptime") - last.uptime_seconds.expect("uptime");
-    assert!(gap >= 0.5, "a page {gap} s after the one before");
-}
 
-/// The clock the pages' `uptime_seconds` come from.
-fn uptime_seconds() -> f64 {
-    let uptime = fs::read_to_string("/proc/uptime").expect("uptime");
-    let seconds = uptime.split_whitespace().next().expect("a first field");
-    seconds.parse().expect("seconds")
+    // The welcome is the page last published: the first watcher has it already, or gets it next
+    // when a reading landed before the subscribe.
+    let welcome_at = welcome.uptime_seconds.expect("uptime");
+    while seen.last().and_then(|page| page.uptime_seconds) < Some(welcome_at) {
+        assert!(seen.len() < MAX_SKIPPED, "the welcome was never published");
+        seen.push(first.cpu_until(|_| true));
+    }
+    assert_eq!(
+        seen.last(),
+        Some(&welcome),
+        "the welcome is a published page"
+    );
+    // Nothing was read for the newcomer: such a reading would reach the first watcher too, sooner
+    // than a full interval after the page before it.
+    seen.push(first.cpu_until(|_| true));
+    for pair in seen.windows(2) {
+        let gap = pair[1].uptime_seconds.expect("uptime") - pair[0].uptime_seconds.expect("uptime");
+        assert!(gap >= 0.5, "a page {gap} s after the one before");
+    }
 }
 
 #[test]
 fn hiding_an_item_with_its_page_open_keeps_the_page_live() {
     let session = Session::new("hiding", CPU_SHOWN);
     let (daemon, _log, hub) = session.start();
-    session
+    let item = session
         .registered
         .recv_timeout(LIMIT)
         .expect("the CPU item registers");
+    let mut item_owner = session.owner_changes(&item);
     let mut panel = session.panel();
     panel.send(WATCH_CPU);
     panel.cpu_until(|page| page.load.is_some());
+    let open = descriptors(&daemon, "/proc/stat");
+    assert_eq!(open.len(), 1, "one reader: {open:?}");
 
+    // Just after a reading, so the next one, which would reopen a closed file, is about a second
+    // away. The item's name goes after the hide has dealt with the reader.
     session.click(&hub, "Show CPU");
-    let config = session.dir.join("config/statsbar/config.toml");
-    // Saved last, so seeing it means the item has been hidden.
-    panel.cpu_until(|page| {
-        assert!(page.load.is_some(), "hiding dropped the page's baseline");
-        fs::read_to_string(&config).is_ok_and(|saved| saved.contains("cpu = false"))
-    });
+    released(&mut item_owner);
+    assert_eq!(
+        descriptors(&daemon, "/proc/stat"),
+        open,
+        "hiding closed the page's reader"
+    );
     for _ in 0..2 {
         let page = panel.cpu_until(|_| true);
         assert!(page.load.is_some(), "hiding dropped the page's baseline");
     }
-    assert!(holds(&daemon, "/proc/stat"));
+    assert_eq!(
+        descriptors(&daemon, "/proc/stat"),
+        open,
+        "the page's reader was reopened"
+    );
+}
+
+#[test]
+fn a_refresh_rescans_the_memory_page_once_half_a_second_has_passed() {
+    let session = Session::new("refresh", ALL_HIDDEN);
+    let (daemon, _log, _hub) = session.start();
+    let mut panel = session.panel();
+    panel.send(WATCH_MEMORY);
+    // The first reading scans the processes. The next is due 1 s later and scans only 2 s later.
+    panel.memory();
+    let since = reads(&daemon);
+    // Only time lets a refresh count, and nothing marks the moment. That reading came before
+    // this point, so it is at least 500 ms old after the wait, with the next one ~500 ms away.
+    std::thread::sleep(MIN_REFRESH);
+    panel.send(REFRESH);
+    let early = panel.memory();
+    assert!(
+        scanned(&daemon, since),
+        "no early reading with a scan: the regular one 1 s on does not scan"
+    );
+
+    // Read a moment ago: the refresh is ignored, and the next reading, a regular one, does not
+    // scan either.
+    let since = reads(&daemon);
+    panel.send(REFRESH);
+    let next = panel.memory();
+    assert!(
+        !scanned(&daemon, since),
+        "an ignored refresh brought the scan forward"
+    );
+    assert_eq!(
+        next.processes, early.processes,
+        "the refresh's ranking, kept"
+    );
 }
 
 #[test]
@@ -5539,9 +6058,31 @@ fn without_a_runtime_directory_it_says_so_and_exits() {
         "it added no tray item"
     );
 }
+
+#[test]
+fn a_runtime_directory_others_can_read_is_refused() {
+    let session = Session::new("shared", ALL_HIDDEN);
+    fs::set_permissions(&session.dir, fs::Permissions::from_mode(0o750)).expect("chmod");
+    let mut daemon = Reaped(session.command().spawn().expect("start statsbard"));
+    let log = lines(daemon.0.stderr.take().expect("piped"));
+    let line = wait_for(&log, "private");
+    assert_eq!(
+        line,
+        format!(
+            "statsbard: cannot open the panel's socket: {} is not a directory private to this user",
+            session.dir.display()
+        )
+    );
+    assert!(!daemon.0.wait().expect("exits").success());
+    assert!(
+        session.registered.try_recv().is_err(),
+        "it added no tray item"
+    );
+    assert!(!session.dir.join("statsbar.sock").exists(), "nor a socket");
+}
 ````
 
-- [ ] **Step 2: Run them, expect FAIL**
+- [x] **Step 2: Run them, expect FAIL**
 
 ```bash
 cargo test -p statsbard --test app_pages
@@ -5551,10 +6092,10 @@ cargo test -p statsbard --test daemon_ipc
 Expected:
 
 - `app_pages` does not compile (E0432 for `page_of`).
-- `daemon_ipc` fails all 6: the current daemon opens no socket, refuses no second copy and
+- `daemon_ipc` fails all 8: the current daemon opens no socket, refuses no second copy and
   ignores `XDG_RUNTIME_DIR`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Apply to `crates/daemon/src/app.rs`:
 
@@ -5835,15 +6376,15 @@ diff --git a/crates/daemon/src/run.rs b/crates/daemon/src/run.rs
          }
 ````
 
-- [ ] **Step 4: Run, expect PASS**
+- [x] **Step 4: Run, expect PASS**
 
 ```bash
 cargo test -p statsbard
 ```
 
-Expected: `app_pages` 16 and `daemon_ipc` 6 pass, with every other daemon test.
+Expected: `app_pages` 16 and `daemon_ipc` 8 pass, with every other daemon test.
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Ready to commit: the files listed above — "feat(daemon): publish the CPU and memory pages"
 
@@ -5863,7 +6404,7 @@ installs `dbus-daemon`. It does not run this task's end-to-end check, which the 
 
 **Interfaces:** consumes the finished `statsbard`; produces no code.
 
-- [ ] **Step 1: Run the gate**
+- [x] **Step 1: Run the gate**
 
 ```bash
 ./scripts/check.sh
@@ -5872,11 +6413,11 @@ cargo build --release -p statsbard
 cargo tree -p statsbard -e normal
 ```
 
-Expected: exit 0 with 329 passed, 0 failed, 1 ignored and `core purity: ok`; no vulnerability and
+Expected: exit 0 with 341 passed, 0 failed, 1 ignored and `core purity: ok`; no vulnerability and
 no advisory beyond the three known "unmaintained" warnings; no `gtk`, `gdk` or `tokio` crate in
 the tree.
 
-- [ ] **Step 2: Repeat the boundary tests**
+- [x] **Step 2: Repeat the boundary tests**
 
 ```bash
 (for i in $(seq 1 25); do cargo test -q -p statsbard --test ipc --test daemon_ipc || exit 1; done)
@@ -5884,7 +6425,7 @@ the tree.
 
 Expected: 25 rounds with no failure. A failure is a bug (`bugfix-strict`), not a retry.
 
-- [ ] **Step 3: Start the real daemon**
+- [x] **Step 3: Start the real daemon**
 
 Note `powerprofilesctl get` so that Step 6 can restore it. If a `statsbard` is running, quit it
 from its hub over D-Bus and start it again in Step 6. Use a scratch config, so the user's is never
@@ -5925,7 +6466,7 @@ for count, line in enumerate(client.makefile("rb"), start=1):
         client.sendall(b'{"type":"refresh"}\n')
 ```
 
-- [ ] **Step 4: Check each row and keep the observed values**
+- [x] **Step 4: Check each row and keep the observed values**
 
 Click over dbusmenu with `busctl --user` (`GetLayout` for the id, then `Event`) and switch profiles
 with `powerprofilesctl set`. Do not ask the user to click.
@@ -5944,13 +6485,13 @@ with `powerprofilesctl set`. Do not ask the user to click.
 | Last watcher leaves | Untick *Show CPU* again during a CPU client, then end the client | `/proc/stat`, the coretemp and the cpufreq files are gone from the fd list |
 | Power saver, open | Set `power-saver` during a client | Still one event a second, with `"power_saver":true` |
 | Power saver, closed | `strace -f -tt -e trace=pread64,read -p $DAEMON` with no client | Reads 5 s apart; if ptrace is refused, sample `/proc/$DAEMON/io` `syscr` each second instead |
-| Socket | `stat -c '%a %U' "$XDG_RUNTIME_DIR/statsbar.sock"` | `600` and the user |
+| Socket | `stat -c '%a %U' "$XDG_RUNTIME_DIR/statsbar.sock"` | `1600` (600 plus the sticky bit) and the user |
 | Second daemon | Start the release binary again | Non-zero exit, `StatsBar is already running`, the first still serves |
 | Threads | `ps -T -p $DAEMON` | Only the invariant's threads |
 | Memory | `grep Pss /proc/$DAEMON/smaps_rollup`, idle and watched | Recorded, against Plan 03b's 2789 kB idle |
 | Quit | The hub's Quit over dbusmenu | Exit 0 and no socket left |
 
-- [ ] **Step 5: Write the docs**
+- [x] **Step 5: Write the docs**
 
 Create `docs/spikes/2026-11-22-04a-ipc-e2e.md` in the form of
 `docs/spikes/2026-11-21-03b-text-labels-e2e.md`: the date, system and tree, one Results row per row
@@ -5975,7 +6516,7 @@ and add after the Plan 03b entry:
 In the roadmap, replace Plan 04a's `- **Evidence:**` bullet with a link to that run and one
 sentence of its observed results, as the earlier plans do.
 
-- [ ] **Step 6: Restore the machine**
+- [x] **Step 6: Restore the machine**
 
 Set the saved power profile, confirm it with `powerprofilesctl get`, and start the user's earlier
 daemon again if there was one. The scratch config directory may stay in the temporary directory.
@@ -5989,6 +6530,6 @@ daemon again if there was one. The scratch config directory may stay in the temp
 4. Report what stayed unverified: the 1.85 and 1.87 floors, autostart through a real login, and
    any row of Step 4 that was not seen.
 
-- [ ] **Step 8: Checkpoint**
+- [x] **Step 8: Checkpoint**
 
 Ready to commit: `docs/spikes/2026-11-22-04a-ipc-e2e.md`, `README.md`, the roadmap, this plan — "docs: record the IPC end-to-end run"
