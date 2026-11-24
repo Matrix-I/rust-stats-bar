@@ -188,7 +188,7 @@ Linux sources were verified to exist on this machine on 2026-11-16 unless marked
 | | Thermal pressure | package temperature: Fair from 75 °C, Serious from 90 °C, Critical from 100 °C | Derived, not a kernel state; `temp1_max` and `temp1_crit` are both 100 °C here |
 | | Low Power Mode | power-profiles-daemon active profile | |
 | | Load average ÷ cores, uptime, chip name | `/proc/loadavg`, `/proc/uptime`, `/proc/cpuinfo` | |
-| | Top processes, quit one | `/proc/<pid>/stat` deltas; `SIGTERM` after a confirmation, own processes only, never GNOME Shell, systemd or StatsBar | No app icons |
+| | Top processes, quit one | `/proc/<pid>/stat` deltas; `SIGTERM` after a confirmation, own processes only, never GNOME Shell, systemd, the GNOME session or StatsBar | No app icons |
 | GPU | Three utilisation rings, history chart | `/proc/<pid>/fdinfo` `drm-engine-render`, `-video`, `-copy` deltas per `drm-client-id` | Own processes only; the three rings are render / video / copy, not device / render / tiler |
 | | Model, frequency | PCI id via `/usr/share/misc/pci.ids` (not yet checked for presence); `gt_act_freq_mhz` | No shader-core count |
 | | Power draw | — | Root-only; omitted |

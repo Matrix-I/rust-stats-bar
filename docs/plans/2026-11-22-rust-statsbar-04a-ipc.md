@@ -46,8 +46,9 @@ The numbers are that list's.
 6. **Thermal** follows the package temperature: Fair from 75 °C, Serious from 90 °C, Critical from
    100 °C, otherwise Nominal.
 7. **A process's memory** is RSS minus shared pages. This replaces the roadmap's RSS.
-8. **Quit a process:** confirm first, send SIGTERM, own processes only, never GNOME Shell, systemd
-   or StatsBar. *(`can_quit` here; the dialog and the signal in 04b)*
+8. **Quit a process:** confirm first, send SIGTERM, own processes only, never GNOME Shell, systemd,
+   the GNOME session (any `gnome-session*` process; user, 2026-11-24) or StatsBar. *(`can_quit`
+   here; the dialog and the signal in 04b)*
 9. **A process's CPU %** is the change between two samples, as in `top`: 100 is one core.
 10. **A process's name** is its executable's name, falling back to `comm`. Each list has six rows.
 11. **"Open details…"** heads the CPU and Memory menus and reuses the window. *(04b)*
@@ -700,6 +701,49 @@ fn the_session_and_statsbar_cannot_be_quit() {
         "a protected name only matches whole"
     );
 }
+
+#[test]
+fn the_gnome_session_cannot_be_quit_under_any_variant_or_truncated_comm() {
+    for name in [
+        "gnome-session-init-worker",
+        "gnome-session-ctl",
+        "gnome-session-service",
+        "gnome-session-binary",
+    ] {
+        assert!(
+            !can_quit(500, 1000, 1000, Some(name), "x"),
+            "{name} by executable"
+        );
+    }
+    for comm in [
+        "gnome-session-s",
+        "gnome-session-c",
+        "gnome-session-i",
+        "gnome-session-b",
+    ] {
+        assert!(
+            !can_quit(500, 1000, 1000, None, comm),
+            "{comm} by truncated kernel name"
+        );
+    }
+    assert!(!can_quit(
+        500,
+        1000,
+        1000,
+        Some("gnome-session-binary (deleted)"),
+        "x"
+    ));
+    assert!(
+        can_quit(
+            500,
+            1000,
+            1000,
+            Some("my-gnome-session-tool"),
+            "my-gnome-sessi"
+        ),
+        "the prefix only matches at the start"
+    );
+}
 ````
 
 Create `crates/core/tests/system.rs`:
@@ -907,6 +951,12 @@ const PROTECTED: [&str; 5] = [
     "statsbar-panel",
 ];
 
+/// Every GNOME session process is protected by prefix: the session helpers are
+/// named `gnome-session-binary` (older GNOME) or `gnome-session-ctl`,
+/// `-service`, `-init-worker` (GNOME 50), and the kernel truncates `comm` to
+/// 15 bytes, so only a prefix covers all variants and the truncated names.
+const PROTECTED_PREFIX: &str = "gnome-session";
+
 /// The fields of `/proc/<pid>/stat` the tables need. Times are in clock ticks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stat {
@@ -1030,7 +1080,8 @@ pub fn display_name(exe: Option<&str>, comm: &str) -> String {
 /// `systemd` is not readable.
 pub fn can_quit(pid: u32, owner_uid: u32, own_uid: u32, exe: Option<&str>, comm: &str) -> bool {
     let exe = exe.map_or("", |name| name.trim_end_matches(DELETED));
-    pid > 1 && owner_uid == own_uid && !PROTECTED.contains(&exe) && !PROTECTED.contains(&comm)
+    let protected = |name: &str| PROTECTED.contains(&name) || name.starts_with(PROTECTED_PREFIX);
+    pid > 1 && owner_uid == own_uid && !protected(exe) && !protected(comm)
 }
 ````
 
@@ -1143,7 +1194,7 @@ impl Thermal {
 cargo test -p statsbar-core && ./scripts/check-core-purity.sh
 ```
 
-Expected: `process` 17, `system` 8 and `pressure` 4 pass, with every older test, and
+Expected: `process` 18, `system` 8 and `pressure` 4 pass, with every older test, and
 `core purity: ok`.
 
 - [x] **Step 5: Checkpoint**
@@ -6413,7 +6464,7 @@ cargo build --release -p statsbard
 cargo tree -p statsbard -e normal
 ```
 
-Expected: exit 0 with 341 passed, 0 failed, 1 ignored and `core purity: ok`; no vulnerability and
+Expected: exit 0 with 342 passed, 0 failed, 1 ignored and `core purity: ok`; no vulnerability and
 no advisory beyond the three known "unmaintained" warnings; no `gtk`, `gdk` or `tokio` crate in
 the tree.
 
@@ -6521,7 +6572,7 @@ sentence of its observed results, as the earlier plans do.
 Set the saved power profile, confirm it with `powerprofilesctl get`, and start the user's earlier
 daemon again if there was one. The scratch config directory may stay in the temporary directory.
 
-- [ ] **Step 7: Review and final gate**
+- [x] **Step 7: Review and final gate**
 
 1. Read the full diff, untracked files included.
 2. Run `code-review-strict` on the branch, and ask it for a security look at `ipc.rs` and
