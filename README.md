@@ -3,7 +3,8 @@
 A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardware figures in the
 panel, details one click away, built to cost as little CPU and memory as possible.
 
-Status: CPU, Memory, Battery, Fan and Network in the tray (statsbard); run with `cargo run --release -p statsbard`.
+Status: CPU, Memory, Battery, Fan and Network in the tray, and the CPU and Memory pages' data on a
+private socket for the coming panel (statsbard); run with `cargo run --release -p statsbard`.
 
 ## Development
 
@@ -41,6 +42,9 @@ reader, which hands plain values to the core.
 - [Plan 03b — text labels](docs/plans/2026-11-21-rust-statsbar-03b-text-labels.md): a themed
   icon with the value as panel text, through a vendored `ksni` with `XAyatanaLabel`;
   [end-to-end run](docs/spikes/2026-11-21-03b-text-labels-e2e.md).
+- [Plan 04a — daemon IPC](docs/plans/2026-11-22-rust-statsbar-04a-ipc.md): the panel's protocol
+  and socket, with process lists and CPU details;
+  [end-to-end run](docs/spikes/2026-11-22-04a-ipc-e2e.md).
 
 ## License
 

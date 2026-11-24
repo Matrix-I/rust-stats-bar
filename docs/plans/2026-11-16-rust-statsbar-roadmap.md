@@ -308,9 +308,11 @@ task. "Evidence" is what its end-to-end check must show.
 - **Tests:** exact protocol lines, unknown fields ignored, version mismatch reported; ranking ties,
   vanished and reused pids; PSI and Thermal at, just below and above each threshold; the socket's
   bounds and uid check; the real binary on a private bus.
-- **Evidence:** a socket client's figures match `top` and `free` within one sample; a watched page
-  is read each second, also under power saver and with its item hidden; after the last watcher
-  leaves, a hidden metric's files are closed.
+- **Evidence:** [the end-to-end run](../spikes/2026-11-22-04a-ipc-e2e.md). A socket client's
+  figures matched `top`, `free`, coretemp and `/proc` within one sample, and a watched page came
+  each second, also under power saver and with its item hidden, whose files closed with the last
+  watcher; 4 threads at Pss 3285 kB idle, with Pressure seen only as Normal and the 5 s closed
+  cadence read off `syscr`, since ptrace was refused.
 
 ### Plan 04b — Panel skeleton (CPU and Memory pages)
 - **Needs first:** `sudo apt install libgtk-4-dev libadwaita-1-dev` on the laptop and the same in CI
