@@ -14,6 +14,12 @@ const PROTECTED: [&str; 5] = [
     "statsbar-panel",
 ];
 
+/// Every GNOME session process is protected by prefix: the session helpers are
+/// named `gnome-session-binary` (older GNOME) or `gnome-session-ctl`,
+/// `-service`, `-init-worker` (GNOME 50), and the kernel truncates `comm` to
+/// 15 bytes, so only a prefix covers all variants and the truncated names.
+const PROTECTED_PREFIX: &str = "gnome-session";
+
 /// The fields of `/proc/<pid>/stat` the tables need. Times are in clock ticks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stat {
@@ -137,5 +143,6 @@ pub fn display_name(exe: Option<&str>, comm: &str) -> String {
 /// `systemd` is not readable.
 pub fn can_quit(pid: u32, owner_uid: u32, own_uid: u32, exe: Option<&str>, comm: &str) -> bool {
     let exe = exe.map_or("", |name| name.trim_end_matches(DELETED));
-    pid > 1 && owner_uid == own_uid && !PROTECTED.contains(&exe) && !PROTECTED.contains(&comm)
+    let protected = |name: &str| PROTECTED.contains(&name) || name.starts_with(PROTECTED_PREFIX);
+    pid > 1 && owner_uid == own_uid && !protected(exe) && !protected(comm)
 }
