@@ -222,3 +222,46 @@ fn the_session_and_statsbar_cannot_be_quit() {
         "a protected name only matches whole"
     );
 }
+
+#[test]
+fn the_gnome_session_cannot_be_quit_under_any_variant_or_truncated_comm() {
+    for name in [
+        "gnome-session-init-worker",
+        "gnome-session-ctl",
+        "gnome-session-service",
+        "gnome-session-binary",
+    ] {
+        assert!(
+            !can_quit(500, 1000, 1000, Some(name), "x"),
+            "{name} by executable"
+        );
+    }
+    for comm in [
+        "gnome-session-s",
+        "gnome-session-c",
+        "gnome-session-i",
+        "gnome-session-b",
+    ] {
+        assert!(
+            !can_quit(500, 1000, 1000, None, comm),
+            "{comm} by truncated kernel name"
+        );
+    }
+    assert!(!can_quit(
+        500,
+        1000,
+        1000,
+        Some("gnome-session-binary (deleted)"),
+        "x"
+    ));
+    assert!(
+        can_quit(
+            500,
+            1000,
+            1000,
+            Some("my-gnome-session-tool"),
+            "my-gnome-sessi"
+        ),
+        "the prefix only matches at the start"
+    );
+}
