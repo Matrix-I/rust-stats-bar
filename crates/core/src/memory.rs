@@ -100,9 +100,9 @@ impl MemoryBuckets {
     }
 
     /// `MemTotal − MemAvailable`: memory that cannot be handed out without evicting or
-    /// swapping something.
+    /// swapping something. Saturates, because the panel gets these buckets from a peer.
     pub fn used(&self) -> u64 {
-        self.app + self.kernel
+        self.app.saturating_add(self.kernel)
     }
 
     pub fn usage_percent(&self) -> f64 {
