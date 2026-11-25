@@ -4,3 +4,5 @@ pub mod cli;
 pub mod link;
 pub mod quit;
 pub mod view;
+mod widgets;
+pub mod window;

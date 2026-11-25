@@ -9,6 +9,11 @@ publish.workspace = true
 [dependencies]
 statsbar-core = { path = "../core" }
 async-channel = "=2.5.0"
+# libadwaita 1.5 is the newest every target has: Ubuntu 24.04, which CI may run, ships 1.5.
+adw = { package = "libadwaita", version = "=0.9.2", features = ["v1_5"] }
+# 4.12 for `WidgetExt::color` (4.10), which the drawn rings take their dim tones from, and
+# `CssProvider::load_from_string`. Ubuntu 24.04 ships 4.14.
+gtk = { package = "gtk4", version = "=0.11.5", features = ["v4_12"] }
 rustix = { version = "=1.1.6", features = ["process"] }
 serde = "=1.0.229"
 serde_json = "=1.0.154"
