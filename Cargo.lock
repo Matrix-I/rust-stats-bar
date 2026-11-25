@@ -645,6 +645,7 @@ name = "statsbar-panel"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "rustix",
  "serde",
  "serde_json",
  "statsbar-core",
