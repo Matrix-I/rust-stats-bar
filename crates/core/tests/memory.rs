@@ -175,3 +175,16 @@ fn an_unknown_total_gives_zero_fractions_instead_of_dividing_by_zero() {
     assert_eq!(buckets.fraction(123), 0.0);
     assert_eq!(buckets.usage_percent(), 0.0);
 }
+
+#[test]
+fn used_saturates_on_buckets_that_do_not_add_up() {
+    // Buckets a peer sent, not ones `from_meminfo` built.
+    let buckets = MemoryBuckets {
+        total: u64::MAX,
+        app: u64::MAX,
+        kernel: 1,
+        ..MemoryBuckets::default()
+    };
+    assert_eq!(buckets.used(), u64::MAX);
+    assert_eq!(buckets.usage_percent(), 100.0);
+}

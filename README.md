@@ -3,8 +3,9 @@
 A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardware figures in the
 panel, details one click away, built to cost as little CPU and memory as possible.
 
-Status: CPU, Memory, Battery, Fan and Network in the tray, and the CPU and Memory pages' data on a
-private socket for the coming panel (statsbard); run with `cargo run --release -p statsbard`.
+Status: CPU, Memory, Battery, Fan and Network in the tray (statsbard), and a details window with the
+CPU and Memory pages (statsbar-panel), opened from "Open details…" in their menus; run with
+`cargo build --release --workspace && ./target/release/statsbard`.
 
 ## Development
 
@@ -45,6 +46,9 @@ reader, which hands plain values to the core.
 - [Plan 04a — daemon IPC](docs/plans/2026-11-22-rust-statsbar-04a-ipc.md): the panel's protocol
   and socket, with process lists and CPU details;
   [end-to-end run](docs/spikes/2026-11-22-04a-ipc-e2e.md).
+- [Plan 04b — panel skeleton](docs/plans/2026-11-24-rust-statsbar-04b-panel.md): the GTK4 and
+  libadwaita window with the CPU and Memory pages, quit from the process lists, and "Open details…"
+  in the tray; [end-to-end run](docs/spikes/2026-11-24-04b-panel-e2e.md).
 
 ## License
 

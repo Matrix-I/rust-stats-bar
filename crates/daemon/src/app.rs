@@ -42,11 +42,13 @@ pub fn page_of(id: ReaderId) -> Option<Page> {
     PAGES.into_iter().find(|&page| reader_of(page) == id)
 }
 
-/// A click in the hub's menu, sent from the `ksni` thread to the main loop.
+/// A menu click, sent from the `ksni` thread to the main loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Toggle(ReaderId),
     ToggleLaunchAtLogin,
+    /// "Open details…" in a metric's menu.
+    OpenPage(Page),
     Quit,
 }
 

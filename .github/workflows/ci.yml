@@ -45,5 +45,8 @@ jobs:
       # tests/ayatana_label.rs runs a private session bus; it fails, never skips, without one.
       - run: command -v dbus-daemon || (sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus-daemon)
 
+      # statsbar-panel links GTK 4 and libadwaita; their headers and .pc files come from these.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev
+
       # The single verification entry point: fmt, clippy, tests and the core purity gate.
       - run: ./scripts/check.sh

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/readers", "crates/daemon"]
+members = ["crates/core", "crates/readers", "crates/daemon", "crates/panel"]
 # The patched ksni (vendor/ksni/PATCHES.md) is a path dependency, not a member, so upstream's
 # code keeps upstream's formatting and is not held to this workspace's lints.
 exclude = ["vendor/ksni"]
