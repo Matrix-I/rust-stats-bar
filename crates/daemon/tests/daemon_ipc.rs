@@ -259,6 +259,56 @@ impl Session {
         });
     }
 
+    /// The menu's layout revision and its entries' ids, labels and visibility, in id order.
+    fn menu(&self, item: &str) -> (u32, Vec<(i32, String, bool)>) {
+        async_io::block_on(async {
+            let layout = self
+                .watcher
+                .call_method(
+                    Some(item),
+                    "/MenuBar",
+                    Some(DBUSMENU),
+                    "GetLayout",
+                    &(0i32, -1i32, Vec::<&str>::new()),
+                )
+                .await
+                .expect("read the layout");
+            type Layout = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
+            let (revision, _): (u32, Layout) = layout.body().deserialize().expect("a layout");
+            let reply = self
+                .watcher
+                .call_method(
+                    Some(item),
+                    "/MenuBar",
+                    Some(DBUSMENU),
+                    "GetGroupProperties",
+                    &(Vec::<i32>::new(), vec!["label", "visible"]),
+                )
+                .await
+                .expect("list the menu");
+            let rows: Vec<(i32, HashMap<String, OwnedValue>)> =
+                reply.body().deserialize().expect("menu rows");
+            let mut entries: Vec<(i32, String, bool)> = rows
+                .into_iter()
+                .map(|(id, properties)| {
+                    let label = properties
+                        .get("label")
+                        .and_then(|value| <&str>::try_from(value).ok())
+                        .unwrap_or_default()
+                        .to_owned();
+                    // dbusmenu leaves out a property at its default, and `visible` defaults to true.
+                    let visible = properties
+                        .get("visible")
+                        .and_then(|value| bool::try_from(value).ok())
+                        .unwrap_or(true);
+                    (id, label, visible)
+                })
+                .collect();
+            entries.sort();
+            (revision, entries)
+        })
+    }
+
     /// Follows who owns `name`, from now on.
     fn owner_changes(&self, name: &str) -> NameOwnerChangedStream {
         async_io::block_on(async {
@@ -592,4 +642,35 @@ fn a_runtime_directory_others_can_read_is_refused() {
         "it added no tray item"
     );
     assert!(!session.dir.join("statsbar.sock").exists(), "nor a socket");
+}
+
+#[test]
+fn the_cpu_menu_keeps_its_ids_while_its_rows_fill_in() {
+    let session = Session::new("menu", CPU_SHOWN);
+    let (_daemon, _log, _hub) = session.start();
+    let cpu = session
+        .registered
+        .recv_timeout(LIMIT)
+        .expect("the CPU item registers");
+    let (revision, before) = session.menu(&cpu);
+    // The first reading only has a baseline; rows come with the second.
+    let mut panel = session.panel();
+    panel.send(WATCH_CPU);
+    panel.cpu_until(|page| page.load.is_some());
+    panel.cpu_until(|_| true);
+    let (revision_after, after) = session.menu(&cpu);
+    assert_eq!(revision_after, revision, "the layout never changed");
+    let ids =
+        |entries: &[(i32, String, bool)]| entries.iter().map(|entry| entry.0).collect::<Vec<_>>();
+    assert_eq!(ids(&after), ids(&before));
+    let open = after
+        .iter()
+        .find(|(_, label, _)| label == "Open details…")
+        .expect("Open details…");
+    assert!(open.2, "Open details… is shown");
+    let usage = after
+        .iter()
+        .find(|(_, label, _)| label.starts_with("Usage "))
+        .expect("the usage row");
+    assert!(usage.2, "the filled rows are shown");
 }

@@ -9,7 +9,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use async_channel::{Receiver, Sender};
+use async_channel::{Receiver, Sender, WeakSender};
 use futures_lite::{StreamExt, future};
 use ksni::{Handle, TrayMethods};
 use statsbar_core::ipc::{Event, Page};
@@ -23,6 +23,7 @@ use statsbar_readers::network::NetworkReader;
 use crate::app::{App, Command, PAGES, READERS, page_of, reader_of, slot};
 use crate::config::Items;
 use crate::ipc::{Change, Options, Server};
+use crate::launch::Launcher;
 use crate::pages::{Pages, System};
 use crate::power::{ProfileWatch, is_power_saver};
 use crate::tray::{Hub, Look, MetricItem, battery_look, network_look, percent_look};
@@ -103,9 +104,11 @@ pub async fn run() -> Result<(), BoxError> {
 
     let (sender, receiver) = async_channel::bounded(COMMAND_CAPACITY);
     let app = App::new(loaded.config, launch_at_login);
+    let launcher = Launcher::beside(std::env::current_exe()?, std::env::var_os("GSK_RENDERER"));
     let mut daemon = Daemon::start(
         app,
         sender,
+        launcher,
         server,
         pages,
         Files {
@@ -196,6 +199,10 @@ struct Daemon {
     app: App,
     files: Files,
     hub: Handle<Hub>,
+    /// For the metric items' "Open details…". Weak, so the command channel still closes, and the
+    /// loop still ends, once the hub and every item have dropped their senders.
+    commands: WeakSender<Command>,
+    launcher: Launcher,
     hub_shown: Option<(Vec<String>, Items, bool)>,
     /// Indexed by `app::slot`.
     items: [Option<Handle<MetricItem>>; 5],
@@ -217,16 +224,20 @@ impl Daemon {
     async fn start(
         app: App,
         commands: Sender<Command>,
+        launcher: Launcher,
         server: Server,
         pages: Pages,
         files: Files,
     ) -> Result<Daemon, BoxError> {
+        let weak_commands = commands.downgrade();
         let hub = Hub::new(commands, app.config.items.clone(), app.launch_at_login);
         let hub = bounded("hub item spawn", SETUP_TIMEOUT, hub.spawn()).await??;
         let mut daemon = Daemon {
             app,
             files,
             hub,
+            commands: weak_commands,
+            launcher,
             hub_shown: None,
             items: Default::default(),
             readers: Readers::default(),
@@ -274,6 +285,7 @@ impl Daemon {
         loop {
             let now = elapsed_nanos(start);
             self.sync_pages();
+            self.launcher.reap();
             for id in self.app.due(now) {
                 self.sample(id, now).await;
             }
@@ -413,6 +425,7 @@ impl Daemon {
         match change {
             Change::Subscribed(page) => {
                 self.sync_pages();
+                self.launcher.reap();
                 // What is known already, so a shown item's page does not open empty. Nothing is
                 // read for it: a read here would be outside the cadence.
                 if let Some(event) = &self.published[page_slot(page)] {
@@ -515,6 +528,11 @@ impl Daemon {
         match command {
             Command::Toggle(id) => self.toggle(id).await,
             Command::ToggleLaunchAtLogin => self.toggle_launch_at_login(),
+            Command::OpenPage(page) => {
+                if let Err(error) = self.launcher.open(page) {
+                    eprintln!("statsbard: opening the panel failed: {error}");
+                }
+            }
             Command::Quit => {}
         }
     }
@@ -533,10 +551,14 @@ impl Daemon {
     }
 
     async fn show_item(&mut self, id: ReaderId) {
+        // `None` only once every sender is gone, when the loop is about to end anyway.
+        let Some(commands) = self.commands.upgrade() else {
+            return;
+        };
         match bounded(
             "metric item spawn",
             SETUP_TIMEOUT,
-            MetricItem::new(id).spawn(),
+            MetricItem::new(id, commands).spawn(),
         )
         .await
         {

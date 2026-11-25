@@ -13,7 +13,7 @@ use ksni::{Category, MenuItem};
 use statsbar_core::schedule::ReaderId;
 use statsbar_core::throughput::Reading;
 
-use crate::app::{BatteryLabel, Command, READERS};
+use crate::app::{BatteryLabel, Command, READERS, page_of};
 use crate::config::Items;
 use crate::summary::{self, Overview};
 
@@ -75,6 +75,33 @@ fn row<T>(text: &str) -> MenuItem<T> {
     .into()
 }
 
+/// A place kept for a row that has no value yet. Showing it later changes a property, not the
+/// layout, so `ksni` keeps every menu id and a click on "Open details…" is never lost.
+fn reserved_row<T>() -> MenuItem<T> {
+    StandardItem {
+        enabled: false,
+        visible: false,
+        ..Default::default()
+    }
+    .into()
+}
+
+/// The most rows `summary::cpu_rows` gives.
+pub const CPU_MENU_ROWS: usize = 5;
+/// The most rows `summary::memory_rows` gives: six, and Compressed while zswap holds pages.
+pub const MEMORY_MENU_ROWS: usize = 7;
+pub const OPEN_DETAILS: &str = "Open details…";
+
+/// Rows kept from the start in a menu that has "Open details…". Other menus have no clickable
+/// item, so their layout may change.
+fn reserved_rows(reader: ReaderId) -> usize {
+    match reader {
+        ReaderId::Cpu => CPU_MENU_ROWS,
+        ReaderId::Memory => MEMORY_MENU_ROWS,
+        ReaderId::Battery | ReaderId::Fan | ReaderId::Network => 0,
+    }
+}
+
 pub struct MetricItem {
     pub reader: ReaderId,
     /// A themed icon name.
@@ -83,16 +110,18 @@ pub struct MetricItem {
     pub label: String,
     pub title: String,
     pub rows: Vec<String>,
+    commands: Sender<Command>,
 }
 
 impl MetricItem {
-    pub fn new(reader: ReaderId) -> MetricItem {
+    pub fn new(reader: ReaderId, commands: Sender<Command>) -> MetricItem {
         MetricItem {
             reader,
             icon: metric_icon(reader).to_owned(),
             label: String::new(),
             title: name(reader).to_owned(),
             rows: Vec::new(),
+            commands,
         }
     }
 }
@@ -141,7 +170,34 @@ impl ksni::Tray for MetricItem {
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
-        self.rows.iter().map(|text| row(text)).collect()
+        let Some(page) = page_of(self.reader) else {
+            return self.rows.iter().map(|text| row(text)).collect();
+        };
+        let mut menu: Vec<MenuItem<Self>> = vec![
+            StandardItem {
+                label: OPEN_DETAILS.to_owned(),
+                activate: Box::new(move |item: &mut MetricItem| {
+                    send(&item.commands, Command::OpenPage(page));
+                }),
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
+        ];
+        let places = reserved_rows(self.reader).max(self.rows.len());
+        menu.extend((0..places).map(|index| match self.rows.get(index) {
+            Some(text) => row(text),
+            None => reserved_row(),
+        }));
+        menu
+    }
+}
+
+/// Never blocks: this runs on the tray thread, which also answers the panel's D-Bus calls. A
+/// click while the queue is full is dropped and logged.
+fn send(commands: &Sender<Command>, command: Command) {
+    if let Err(error) = commands.try_send(command) {
+        eprintln!("statsbard: menu click dropped: {error}");
     }
 }
 
@@ -165,13 +221,9 @@ impl Hub {
         }
     }
 
-    /// Never blocks: this runs on the tray thread, which also answers the panel's D-Bus calls. A
-    /// click while the queue is full is dropped and logged; the checkmark then still shows the
-    /// state the main loop last set.
+    /// A dropped click leaves the checkmark showing the state the main loop last set.
     fn send(&self, command: Command) {
-        if let Err(error) = self.commands.try_send(command) {
-            eprintln!("statsbard: menu click dropped: {error}");
-        }
+        send(&self.commands, command);
     }
 }
 
