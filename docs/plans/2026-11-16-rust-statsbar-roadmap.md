@@ -314,9 +314,9 @@ task. "Evidence" is what its end-to-end check must show.
   watcher; 4 threads at Pss 3285 kB idle, with Pressure seen only as Normal and the 5 s closed
   cadence read off `syscr`, since ptrace was refused.
 
-### Plan 04b — Panel skeleton (CPU and Memory pages)
-- **Needs first:** `sudo apt install libgtk-4-dev libadwaita-1-dev` on the laptop and the same in CI
-  (approved 2026-11-22, not installed yet); Rust 1.92 as the panel's floor.
+### Plan 04b — Panel skeleton (CPU and Memory pages) *(written: `docs/plans/2026-11-24-rust-statsbar-04b-panel.md`)*
+- **Needs first (done):** `libgtk-4-dev libadwaita-1-dev` installed on the laptop on 2026-11-24 and
+  in CI; Rust 1.92 as the panel's floor.
 - **Scope:** decisions 2, 11, 13 and 17, and the panel half of 3, 5, 8, 15 and 16: the GTK window
   (reused, not duplicated); rings, per-core bars, memory bar and process lists; quit with a
   confirmation and SIGTERM, guarded again by pid and start time; "Open details…" at the top of the
@@ -324,6 +324,11 @@ task. "Evidence" is what its end-to-end check must show.
   Refresh footer; "—" for missing PSI. Measure the Cairo renderer against GL and keep the lighter.
 - **Evidence:** panel figures match `top` and `free` within one sample; closing the panel leaves no
   `statsbar-panel` process and the daemon back at its closed-page cadence.
+  [The end-to-end run](../spikes/2026-11-24-04b-panel-e2e.md): figures matched `free`, `top` and
+  coretemp within one sample, one window took a second launch's page, quit and its failure toast
+  were seen on stand-ins, Retry and "Open details…" reconnected after a daemon restart, and closing
+  left no panel and the daemon's reads back from about 2370 to 6–31 a second. Cairo kept at Pss
+  about 23 MB against 50–127 MB for GL; the daemon at Pss 2919 kB on a fresh start.
 
 ### Plan 05 — Battery and Network pages
 - **Scope:** battery detail page; NetworkManager reader; Wi-Fi details; DNS; ping; public IP; the
