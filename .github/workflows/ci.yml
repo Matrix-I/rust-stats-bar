@@ -1,7 +1,8 @@
 name: CI
 
 # Runs only when something that can change the build result changes: Rust sources, the
-# manifests and lock file, the check scripts, or this workflow. Docs-only changes skip it.
+# manifests and lock file, the check scripts, the GNOME Shell extension, or this workflow.
+# Docs-only changes skip it.
 on:
   push:
     branches: [main]
@@ -10,6 +11,7 @@ on:
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "scripts/**"
+      - "extension/**"
       - ".github/workflows/ci.yml"
   pull_request:
     paths:
@@ -17,6 +19,7 @@ on:
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "scripts/**"
+      - "extension/**"
       - ".github/workflows/ci.yml"
 
 permissions:
@@ -47,6 +50,9 @@ jobs:
 
       # statsbar-panel links GTK 4 and libadwaita; their headers and .pc files come from these.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev
+
+      # scripts/check-extension.sh runs the GNOME Shell extension's tests with gjs.
+      - run: command -v gjs || (sudo apt-get update && sudo apt-get install -y --no-install-recommends gjs)
 
       # The single verification entry point: fmt, clippy, tests and the core purity gate.
       - run: ./scripts/check.sh

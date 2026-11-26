@@ -4,7 +4,9 @@ A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardwa
 panel, details one click away, built to cost as little CPU and memory as possible.
 
 Status: CPU, Memory, Battery, Fan and Network in the tray (statsbard), and a details window with the
-CPU and Memory pages (statsbar-panel), opened from "Open details…" in their menus; run with
+CPU and Memory pages (statsbar-panel), opened by a single left click on their icons with the
+StatsBar GNOME Shell extension installed (`./scripts/install-extension.sh`, log out and back in,
+then run it again), by a double click without it, or from "Open details…" in their menus; run with
 `cargo build --release --workspace && ./target/release/statsbard`.
 
 ## Development
@@ -49,6 +51,9 @@ reader, which hands plain values to the core.
 - [Plan 04b — panel skeleton](docs/plans/2026-11-24-rust-statsbar-04b-panel.md): the GTK4 and
   libadwaita window with the CPU and Memory pages, quit from the process lists, and "Open details…"
   in the tray; [end-to-end run](docs/spikes/2026-11-24-04b-panel-e2e.md).
+- [Plan 04d — single-click extension](docs/plans/2026-11-26-rust-statsbar-04d-click-extension.md):
+  a GNOME Shell extension so a single left click on CPU or Memory opens its page
+  ([ADR 0001](docs/adr/0001-single-click-opens-panel-extension.md)).
 
 ## License
 

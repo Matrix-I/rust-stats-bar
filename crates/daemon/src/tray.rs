@@ -1,7 +1,7 @@
 //! The `ksni` tray items: one per metric, plus the hub. `ksni`'s driver thread calls their `Tray`
 //! methods and menu callbacks; the main loop changes their fields through `Handle::update`, whose
-//! closure runs on the main thread under `ksni`'s lock. Menu clicks become `Command`s for the main
-//! loop; nothing here reads or writes files.
+//! closure runs on the main thread under `ksni`'s lock. Menu clicks and left clicks become
+//! `Command`s for the main loop; nothing here reads or writes files.
 //!
 //! A metric item is a themed icon with its value as `XAyatanaLabel` text. The shell draws that
 //! text in its panel font, which stays legible at fractional scales where a pixmap blurs
@@ -169,6 +169,13 @@ impl ksni::Tray for MetricItem {
         label_guide(self.reader).to_owned()
     }
 
+    /// A left click opens the same page as "Open details…"; items without a page do nothing.
+    fn activate(&mut self, _x: i32, _y: i32) {
+        if let Some(page) = page_of(self.reader) {
+            send(&self.commands, Command::OpenPage(page));
+        }
+    }
+
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let Some(page) = page_of(self.reader) else {
             return self.rows.iter().map(|text| row(text)).collect();
@@ -197,7 +204,7 @@ impl ksni::Tray for MetricItem {
 /// click while the queue is full is dropped and logged.
 fn send(commands: &Sender<Command>, command: Command) {
     if let Err(error) = commands.try_send(command) {
-        eprintln!("statsbard: menu click dropped: {error}");
+        eprintln!("statsbard: click dropped: {error}");
     }
 }
 

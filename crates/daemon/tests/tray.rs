@@ -371,3 +371,37 @@ fn a_full_command_queue_drops_open_details_too() {
     );
     assert!(receiver.try_recv().is_err());
 }
+
+#[test]
+fn a_left_click_opens_the_page_of_cpu_and_memory_only() {
+    for (reader, page) in [
+        (ReaderId::Cpu, statsbar_core::ipc::Page::Cpu),
+        (ReaderId::Memory, statsbar_core::ipc::Page::Memory),
+    ] {
+        let (mut item, receiver) = item(reader);
+        item.activate(10, 20);
+        assert_eq!(
+            receiver.try_recv(),
+            Ok(Command::OpenPage(page)),
+            "{reader:?}"
+        );
+        assert!(receiver.try_recv().is_err(), "one command per click");
+    }
+    for reader in [ReaderId::Battery, ReaderId::Fan, ReaderId::Network] {
+        let (mut item, receiver) = item(reader);
+        item.activate(10, 20);
+        assert!(receiver.try_recv().is_err(), "{reader:?} sends nothing");
+    }
+}
+
+#[test]
+fn a_full_command_queue_drops_a_left_click() {
+    let (mut item, receiver) = item(ReaderId::Memory);
+    item.activate(0, 0);
+    item.activate(0, 0);
+    assert_eq!(
+        receiver.try_recv(),
+        Ok(Command::OpenPage(statsbar_core::ipc::Page::Memory))
+    );
+    assert!(receiver.try_recv().is_err());
+}
