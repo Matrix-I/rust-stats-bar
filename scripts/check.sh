@@ -11,3 +11,5 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ./scripts/check-core-purity.sh
+./scripts/check-extension.sh
+./scripts/test-install-extension.sh

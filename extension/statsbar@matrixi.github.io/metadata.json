@@ -1,0 +1,6 @@
+{
+  "uuid": "statsbar@matrixi.github.io",
+  "name": "StatsBar single click",
+  "description": "A single left click on StatsBar's CPU or Memory icon opens its details page.",
+  "shell-version": ["50"]
+}
