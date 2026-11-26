@@ -4,7 +4,8 @@ A Linux counterpart of [StatsBar](https://github.com/Matrix-I/stats-bar): hardwa
 panel, details one click away, built to cost as little CPU and memory as possible.
 
 Status: CPU, Memory, Battery, Fan and Network in the tray (statsbard), and a details window with the
-CPU and Memory pages (statsbar-panel), opened from "Open details…" in their menus; run with
+CPU and Memory pages (statsbar-panel), opened by a left click on their icons or from "Open details…"
+in their menus; run with
 `cargo build --release --workspace && ./target/release/statsbard`.
 
 ## Development
